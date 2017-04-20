@@ -1,4 +1,3 @@
-# $Id$
 #
 # Script for adding and dropping Kamailio Postgres tables
 #
@@ -44,14 +43,22 @@ fi
 if [ -z "$DBROOTUSER" ]; then
 	DBROOTUSER="postgres"
 	if [ ! -r ~/.pgpass ]; then
-		merr "~./pgpass does not exist, please create this file and support proper credentials for user postgres."
+		merr "~/.pgpass does not exist"
+		merr "create this file and add proper credentials for user postgres"
 		merr "Note: you need at least postgresql>= 7.3"
+		merr "Hint: .pgpass hostname must match DBHOST"
 		exit 1
 	fi
 fi
 
-CMD="psql -q -h $DBHOST -U $DBROOTUSER "
-DUMP_CMD="pg_dump -h $DBHOST -U $DBROOTUSER -c"
+if [ -z "$DBPORT" ] ; then
+	CMD="psql -q -h $DBHOST -U $DBROOTUSER "
+	DUMP_CMD="pg_dump -h $DBHOST -U $DBROOTUSER -c"
+else
+	CMD="psql -q -h $DBHOST -p $DBHOST -U $DBROOTUSER "
+	DUMP_CMD="pg_dump -h $DBHOST -p $DBHOST -U $DBROOTUSER -c"
+fi
+
 #################################################################
 
 
