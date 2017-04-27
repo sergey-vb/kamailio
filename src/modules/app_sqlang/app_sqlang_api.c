@@ -52,9 +52,7 @@ void sqlang_sr_kemi_register_libs(HSQUIRRELVM J);
 typedef struct _sr_sqlang_env
 {
 	HSQUIRRELVM J;
-	int J_exit;
 	HSQUIRRELVM JJ;
-	int JJ_exit;
 	sip_msg_t *msg;
 	unsigned int flags;
 	unsigned int nload; /* number of scripts loaded */
@@ -250,15 +248,7 @@ static int sqlang_isfunction(HSQUIRRELVM J, int idx)
 
 static char* sqlang_safe_tostring(HSQUIRRELVM J, int idx)
 {
-	const SQChar *s = NULL;
-
-	if(idx>=0) {
-		idx += 2;
-	}
-	if(sqlang_isstring(J, idx)) {
-		sq_getstring(J, idx, &s);
-	}
-	return (s)?(char*)s:"Error on sqlang";
+	return "Error on sqlang";
 }
 
 static int sqlang_gettype(HSQUIRRELVM J, int idx)
@@ -518,11 +508,6 @@ const SQRegFunction _sr_kemi_pv_J_Map[] = {
  */
 static SQInteger sqlang_sr_exit (HSQUIRRELVM J)
 {
-	if(_sr_J_env.JJ==J) {
-		_sr_J_env.JJ_exit = 1;
-	} else {
-		_sr_J_env.J_exit = 1;
-	}
 	return sq_throwerror(J, _SC("~~ksr~exit~~"));
 }
 
@@ -531,11 +516,6 @@ static SQInteger sqlang_sr_exit (HSQUIRRELVM J)
  */
 static SQInteger sqlang_sr_drop (HSQUIRRELVM J)
 {
-	if(_sr_J_env.JJ==J) {
-		_sr_J_env.JJ_exit = 1;
-	} else {
-		_sr_J_env.J_exit = 1;
-	}
 	sr_kemi_core_drop(NULL);
 	return sq_throwerror(J, _SC("~~ksr~exit~~"));
 }
@@ -713,22 +693,10 @@ const SQRegFunction _sr_kemi_x_J_Map[] = {
 /**
  *
  */
-void sqlang_errorfunc(HSQUIRRELVM J, const SQChar *fmt, ...)
+void sqlang_errorfunc(HSQUIRRELVM SQ_UNUSED_ARG(J), const SQChar *fmt,...)
 {
 	char ebuf[4096];
 	va_list ap;
-
-	if(_sr_J_env.JJ==J) {
-		if(_sr_J_env.JJ_exit == 1) {
-			LM_DBG("exception on ksr exit (JJ)\n");
-			return;
-		}
-	} else {
-		if(_sr_J_env.J_exit == 1) {
-			LM_DBG("exception on ksr exit (J)\n");
-			return;
-		}
-	}
 
 	ebuf[0] = '\0';
 	va_start(ap, fmt);
@@ -997,23 +965,16 @@ int app_sqlang_run_ex(sip_msg_t *msg, char *func, char *p1, char *p2,
 	LM_DBG("executing sqlang function: [[%s]] (n: %d)\n", func, n);
 	bmsg = _sr_J_env.msg;
 	_sr_J_env.msg = msg;
-	_sr_J_env.JJ_exit = 0;
 	/* call the function */
 	rv = sq_call(_sr_J_env.JJ, n, SQFalse, SQTrue);
 	if(SQ_SUCCEEDED(rv)) {
 		ret = 1;
 	} else {
-		if(_sr_J_env.JJ_exit==0) {
-			LM_ERR("failed to execute the func: %s (%d)\n", func, (int)rv);
-			sqstd_printcallstack(_sr_J_env.JJ);
-			ret = -1;
-		} else {
-			LM_DBG("script execution exit\n");
-			ret = 1;
-		}
+		LM_ERR("failed to execute the func: %s (%d)\n", func, (int)rv);
+		sqstd_printcallstack(_sr_J_env.JJ);
+		ret = -1;
 	}
 	_sr_J_env.msg = bmsg;
-	_sr_J_env.JJ_exit = 0;
 	sq_settop(_sr_J_env.JJ, (top<=0)?1:top); /* restores the original stack size */
 
 	return ret;
