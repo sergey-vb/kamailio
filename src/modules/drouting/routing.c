@@ -324,8 +324,6 @@ add_dst(
 	pgw->id = id;
 	pgw->strip = strip;
 	pgw->type = type;
-	// by default, the destination is considered up
-	pgw->state = KA_STATE_UP;
 
 	/* add address in the list */
 	if(pgw->ip.len<5 || (strncasecmp("sip:", ip, 4)

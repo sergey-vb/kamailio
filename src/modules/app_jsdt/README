@@ -36,8 +36,7 @@ Daniel-Constantin Mierla
 
         5. RPC Commands
 
-              5.1. app_jsdt.reload
-              5.2. app_jsdt.api_list
+              5.1. app_jsrt.reload
 
         6. Example of usage
 
@@ -72,8 +71,7 @@ Chapter 1. Admin Guide
 
    5. RPC Commands
 
-        5.1. app_jsdt.reload
-        5.2. app_jsdt.api_list
+        5.1. app_jsrt.reload
 
    6. Example of usage
 
@@ -196,13 +194,12 @@ if(!jsdt_runstring('KSR.dbg("Hello World from $fU\n")'))
 
 5. RPC Commands
 
-   5.1. app_jsdt.reload
-   5.2. app_jsdt.api_list
+   5.1. app_jsrt.reload
 
-5.1.  app_jsdt.reload
+5.1.  app_jsrt.reload
 
    Marks the need to reload the js script. The actual reload is done by
-   every working process when the next call to jsdt_run() function or KEMI
+   every working process when the next call to jsrt_run() function or KEMI
    config is executed.
 
    Name: app_jsdt.reload
@@ -211,20 +208,7 @@ if(!jsdt_runstring('KSR.dbg("Hello World from $fU\n")'))
 
    Example:
 ...
-kamcmd app_jsdt.reload
-...
-
-5.2.  app_jsdt.api_list
-
-   List the functions available via Kemi framework.
-
-   Name: app_jsdt.api_list
-
-   Parameters: none
-
-   Example:
-...
-kamcmd app_jsdt.api_list
+kamcmd app_jsrt.reload
 ...
 
 6. Example of usage

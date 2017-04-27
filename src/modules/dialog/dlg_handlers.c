@@ -61,7 +61,7 @@ static str       rr_param;		/*!< record-route parameter for matching */
 static int       dlg_flag_mask=0;	/*!< flag for dialog tracking */
 static pv_spec_t *timeout_avp;		/*!< AVP for timeout setting */
 static int       default_timeout;	/*!< default dialog timeout */
-static int       seq_match_mode;	/*!< dlg_match mode */
+static int       seq_match_mode;	/*!< dlg_match mode */ 
 static int       shutdown_done = 0;	/*!< 1 when destroy_dlg_handlers was called */
 extern int       detect_spirals;
 extern int       dlg_timeout_noreset;
@@ -171,7 +171,7 @@ static inline int add_dlg_rr_param(struct sip_msg *req, unsigned int entry,
 /*!
  * \brief Parse SIP message and populate leg informations
  *
- * Parse SIP message and populate leg informations.
+ * Parse SIP message and populate leg informations. 
  * \param dlg the dialog to add cseq, contact & record_route
  * \param msg sip message
  * \param t transaction
@@ -455,11 +455,7 @@ static void dlg_onreply(struct cell* t, int type, struct tmcb_params *param)
 		event = DLG_EVENT_RPL3xx;
 
 	next_state_dlg( dlg, event, &old_state, &new_state, &unref);
-	if(dlg_run_event_route(dlg, (rpl==FAKED_REPLY)?NULL:rpl, old_state,
-			new_state)<0) {
-		/* dialog is gone */
-		return;
-	}
+	dlg_run_event_route(dlg, (rpl==FAKED_REPLY)?NULL:rpl, old_state, new_state);
 
 	if (new_state==DLG_STATE_EARLY) {
 		run_dlg_callbacks(DLGCB_EARLY, dlg, req, rpl, DLG_DIR_UPSTREAM, 0);
@@ -817,7 +813,7 @@ static void unref_new_dialog(void *iuid)
  * \param t transaction
  * \param run_initial_cbs if set zero, initial callbacks are not executed
  * \return 0 on success, -1 on failure
- */
+ */ 
 int dlg_new_dialog(sip_msg_t *req, struct cell *t, const int run_initial_cbs)
 {
 	dlg_cell_t *dlg;
@@ -1195,7 +1191,7 @@ dlg_cell_t *dlg_lookup_msg_dialog(sip_msg_t *msg, unsigned int *dir)
 		}
 		return dlg;
 	}
-
+	
 	if (pre_match_parse(msg, &callid, &ftag, &ttag, 0)<0)
 		return NULL;
 	vdir = DLG_DIR_NONE;
@@ -1231,6 +1227,7 @@ dlg_cell_t *dlg_get_msg_dialog(sip_msg_t *msg)
 void dlg_onroute(struct sip_msg* req, str *route_params, void *param)
 {
 	dlg_cell_t *dlg = NULL;
+	dlg_cell_t *dlg0 = NULL;
 	dlg_iuid_t *iuid = NULL;
 	str val, callid, ftag, ttag;
 	int h_entry=0, h_id=0, new_state=0, old_state=0;
@@ -1369,9 +1366,15 @@ void dlg_onroute(struct sip_msg* req, str *route_params, void *param)
 	CURR_DLG_LIFETIME = (unsigned int)(time(0))-dlg->start_ts;
 	CURR_DLG_STATUS = new_state;
 
-	if(dlg_run_event_route(dlg, req, old_state, new_state)<0) {
-		/* dialog is gone */
+	dlg_run_event_route(dlg, req, old_state, new_state);
+
+	dlg0 = dlg_lookup(h_entry, h_id);
+	if (dlg0==0) {
+		LM_ALERT("after event route - dialog not found [%u:%u] (%d/%d) (%p)\n",
+				h_entry, h_id, old_state, new_state, dlg);
 		return;
+	} else {
+		dlg_release(dlg0);
 	}
 
 	/* delay deletion of dialog until transaction has died off in order
@@ -1586,10 +1589,7 @@ void dlg_ontimeout(struct dlg_tl *tl)
 		timeout_cb = (void *)CONFIRMED_DIALOG_STATE;
 	}
 
-	if(dlg_run_event_route(dlg, NULL, old_state, new_state)<0) {
-		/* dialog is gone */
-		return;
-	}
+	dlg_run_event_route(dlg, NULL, old_state, new_state);
 
 	if (new_state==DLG_STATE_DELETED && old_state!=DLG_STATE_DELETED) {
 		LM_WARN("timeout for dlg with CallID '%.*s' and tags '%.*s' '%.*s'\n",
@@ -1680,24 +1680,20 @@ int pv_get_dlg_status(struct sip_msg *msg, pv_param_t *param, pv_value_t *res)
 
 /*!
  * \brief Execute event routes based on new state
- * - returns: -1 if dialog doesn't exist after event route execution
- *             0 if all ok
+ *
  */
-int dlg_run_event_route(dlg_cell_t *dlg, sip_msg_t *msg, int ostate, int nstate)
+void dlg_run_event_route(dlg_cell_t *dlg, sip_msg_t *msg, int ostate, int nstate)
 {
 	sip_msg_t *fmsg;
 	int rt;
 	int bkroute;
 	sr_kemi_eng_t *keng = NULL;
-	str evname = str_init("unknown");
-	int h_entry=0;
-	int h_id=0;
-	dlg_cell_t *dlg0 = NULL;
+	str evname;
 
 	if(dlg==NULL)
-		return -1;
+		return;
 	if(ostate==nstate)
-		return 0;
+		return;
 
 	rt = -1;
 	if(dlg_event_callback.s==NULL || dlg_event_callback.len<=0) {
@@ -1717,28 +1713,27 @@ int dlg_run_event_route(dlg_cell_t *dlg, sip_msg_t *msg, int ostate, int nstate)
 			}
 		}
 		if(rt==-1 || event_rt.rlist[rt]==NULL)
-			return 0;
+			return;
 	}  else {
 		keng = sr_kemi_eng_get();
 		if(keng==NULL) {
 			LM_DBG("event callback (%s) set, but no cfg engine\n",
 					dlg_event_callback.s);
-			return 0;
+			return;
 		}
 	}
 
+
+	if(msg==NULL)
+		fmsg = faked_msg_next();
+	else
+		fmsg = msg;
+
+	if (exec_pre_script_cb(fmsg, LOCAL_CB_TYPE)<=0)
+		return;
+
 	if(rt>=0 || dlg_event_callback.len>0) {
-		if(msg==NULL)
-			fmsg = faked_msg_next();
-		else
-			fmsg = msg;
-
-		if (exec_pre_script_cb(fmsg, LOCAL_CB_TYPE)<=0)
-			return 0;
-
 		dlg_ref(dlg, 1);
-		h_entry = dlg->h_entry;
-		h_id = dlg->h_id;
 		dlg_set_ctx_iuid(dlg);
 		LM_DBG("executing event_route %d on state %d\n", rt, nstate);
 		bkroute = get_route_type();
@@ -1756,19 +1751,9 @@ int dlg_run_event_route(dlg_cell_t *dlg, sip_msg_t *msg, int ostate, int nstate)
 		}
 		dlg_reset_ctx_iuid();
 		exec_post_script_cb(fmsg, LOCAL_CB_TYPE);
+		dlg_unref(dlg, 1);
 		set_route_type(bkroute);
-		/* re-lookup the dialog, execution of the route could take long time */
-		dlg0 = dlg_lookup(h_entry, h_id);
-		if (dlg0==0) {
-			LM_ALERT("after event route - dialog not found [%u:%u] (%d/%d) (%p) (%.*s)\n",
-					h_entry, h_id, ostate, nstate, dlg, evname.len, evname.s);
-			return -1;
-		} else {
-			dlg_release(dlg0);
-			dlg_unref(dlg, 1);
-		}
 	}
-	return 0;
 }
 
 int dlg_manage(sip_msg_t *msg)
