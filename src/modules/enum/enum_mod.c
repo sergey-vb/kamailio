@@ -49,12 +49,11 @@ str i_branchlabel = str_init("i");
 str i_suffix = str_init("e164.arpa.");
 str i_bl_alg = str_init("cc");
 
-str service = {0, 0};
+str service = {0,0};
 
 /*
  * Exported functions
  */
-/* clang-format off */
 static cmd_export_t cmds[] = {
 	{"enum_query", (cmd_function)enum_query_0, 0, 0, 0, REQUEST_ROUTE},
 	{"enum_query", (cmd_function)enum_query_1, 1, fixup_spve_null, 0,
@@ -80,12 +79,11 @@ static cmd_export_t cmds[] = {
 	 REQUEST_ROUTE},
 	{0, 0, 0, 0, 0, 0}
 };
-/* clang-format on */
+
 
 /*
  * Exported parameters
  */
-/* clang-format off */
 static param_export_t params[] = {
 	{"domain_suffix", PARAM_STR, &suffix},
 	{"tel_uri_params", PARAM_STR, &param},
@@ -94,12 +92,11 @@ static param_export_t params[] = {
 	{"bl_algorithm", PARAM_STR, &i_bl_alg},
 	{0, 0, 0}
 };
-/* clang-format on */
+
 
 /*
  * Module parameter variables
  */
-/* clang-format off */
 struct module_exports exports = {
 	"enum", 
 	DEFAULT_DLFLAGS, /* dlopen flags */
@@ -114,4 +111,4 @@ struct module_exports exports = {
 	0,        /* destroy function */
 	0         /* per-child init function */
 };
-/* clang-format on */
+
