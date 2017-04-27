@@ -136,7 +136,6 @@ int fixup_spve_str(void** param, int param_no);
 int fixup_free_spve_str(void** param, int param_no);
 
 int fixup_spve_all(void** param, int param_no);
-int fixup_free_spve_all(void** param, int param_no);
 int fixup_igp_all(void** param, int param_no);
 
 int fixup_spve_igp(void** param, int param_no);
