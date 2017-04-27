@@ -79,17 +79,18 @@ int register_script_cb( cb_function f, unsigned int flags, void *param )
 
 	/* type checkings */
 	if ( (flags&((1<<SCRIPT_CB_NUM)-1))==0 ) {
-		LM_BUG("callback flag not specified\n");
+		LOG(L_BUG, "register_script_cb: callback flag not specified\n");
 		return -1;
 	}
 	if ( (flags&(~(PRE_SCRIPT_CB|POST_SCRIPT_CB))) >= 1<<SCRIPT_CB_NUM ) {
-		LM_BUG("unsupported callback flags: %u\n",
+		LOG(L_BUG, "register_script_cb: unsupported callback flags: %u\n",
 			flags);
 		return -1;
 	}
 	if ( (flags&(PRE_SCRIPT_CB|POST_SCRIPT_CB))==0 ||
 	(flags&PRE_SCRIPT_CB && flags&POST_SCRIPT_CB) ) {
-		LM_BUG("callback POST or PRE type must be exactly one\n");
+		LOG(L_BUG, "register_script_cb: callback POST or PRE type must "
+			"be exactly one\n");
 		return -1;
 	}
 
@@ -151,7 +152,7 @@ int exec_pre_script_cb( struct sip_msg *msg, enum script_cb_type type)
 	unsigned int	flags;
 
 	if (type > SCRIPT_CB_NUM) {
-		LM_BUG("unknown callback type %d\n", type);
+		LOG(L_BUG, "Uknown callback type %d\n", type);
 		return 0;
 	}
 
@@ -173,7 +174,7 @@ int exec_post_script_cb( struct sip_msg *msg, enum script_cb_type type)
 	unsigned int	flags;
 
 	if (type > SCRIPT_CB_NUM) {
-		LM_BUG("unknown callback type %d\n", type);
+		LOG(L_BUG, "Uknown callback type %d\n", type);
 		return 1;
 	}
 
