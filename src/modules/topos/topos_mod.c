@@ -280,14 +280,12 @@ int tps_msg_received(void *data)
 	str *obuf;
 	char *nbuf = NULL;
 	int dialog;
-	int ret;
 
 	obuf = (str*)data;
 	memset(&msg, 0, sizeof(sip_msg_t));
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-	ret = 0;
 	if(tps_prepare_msg(&msg)!=0) {
 		goto done;
 	}
@@ -312,22 +310,17 @@ int tps_msg_received(void *data)
 		/* reply */
 		if(msg.first_line.u.reply.statuscode==100) {
 			/* nothing to do - it should be absorbed */
-			goto done;
+			return 0;
 		}
 		tps_response_received(&msg);
 	}
 
 	nbuf = tps_msg_update(&msg, (unsigned int*)&obuf->len);
 
-	if(nbuf==NULL) {
-		LM_ERR("not enough pkg memory for new message\n");
-		ret = -1;
-		goto done;
-	}
 	if(obuf->len>=BUF_SIZE) {
 		LM_ERR("new buffer overflow (%d)\n", obuf->len);
-		ret = -1;
-		goto done;
+		pkg_free(nbuf);
+		return -1;
 	}
 	memcpy(obuf->s, nbuf, obuf->len);
 	obuf->s[obuf->len] = '\0';
@@ -336,7 +329,7 @@ done:
 	if(nbuf!=NULL)
 		pkg_free(nbuf);
 	free_sip_msg(&msg);
-	return ret;
+	return 0;
 }
 
 /**
@@ -375,7 +368,7 @@ int tps_msg_sent(void *data)
 		/* reply */
 		if(msg.first_line.u.reply.statuscode==100) {
 			/* nothing to do - it should be locally generated */
-			goto done;
+			return 0;
 		}
 		tps_response_sent(&msg);
 	}
