@@ -37,7 +37,6 @@
 #include "../../core/dprint.h"
 #include "../../core/mod_fix.h"
 #include "../../core/parser/parse_uri.h"
-#include "../../core/kemi.h"
 
 #include "exec.h"
 #include "kill.h"
@@ -50,9 +49,9 @@ int exec_bash_safety=1;
 
 static int mod_init( void );
 
-static int w_exec_dset(struct sip_msg* msg, char* cmd, char* foo);
-static int w_exec_msg(struct sip_msg* msg, char* cmd, char* foo);
-static int w_exec_avp(struct sip_msg* msg, char* cmd, char* avpl);
+inline static int w_exec_dset(struct sip_msg* msg, char* cmd, char* foo);
+inline static int w_exec_msg(struct sip_msg* msg, char* cmd, char* foo);
+inline static int w_exec_avp(struct sip_msg* msg, char* cmd, char* avpl);
 
 static int exec_avp_fixup(void** param, int param_no);
 
@@ -112,11 +111,12 @@ static int mod_init( void )
 	return 0;
 }
 
-static int ki_exec_dset(struct sip_msg* msg, str* cmd)
+inline static int w_exec_dset(struct sip_msg* msg, char* cmd, char* foo)
 {
 	str *uri;
 	environment_t *backup;
 	int ret;
+	str command;
 	
 	if(msg==0 || cmd==0)
 		return -1;
@@ -135,30 +135,27 @@ static int ki_exec_dset(struct sip_msg* msg, str* cmd)
 	else
 		uri=&msg->first_line.u.request.uri;
 	
-	LM_DBG("executing [%s]\n", cmd->s);
+	if(fixup_get_svalue(msg, (gparam_p)cmd, &command)!=0)
+	{
+		LM_ERR("invalid command parameter");
+		return -1;
+	}
+	
+	LM_DBG("executing [%s]\n", command.s);
 
-	ret=exec_str(msg, cmd->s, uri->s, uri->len);
+	ret=exec_str(msg, command.s, uri->s, uri->len);
 	if (setvars) {
 		unset_env(backup);
 	}
 	return ret;
 }
 
-static int w_exec_dset(struct sip_msg* msg, char* cmd, char* foo)
-{
-	str command;
-	if(fixup_get_svalue(msg, (gparam_p)cmd, &command)!=0)
-	{
-		LM_ERR("invalid command parameter");
-		return -1;
-	}
-	return ki_exec_dset(msg, &command);
-}
 
-static int ki_exec_msg(struct sip_msg* msg, str* cmd)
+inline static int w_exec_msg(struct sip_msg* msg, char* cmd, char* foo)
 {
 	environment_t *backup;
 	int ret;
+	str command;
 	
 	if(msg==0 || cmd==0)
 		return -1;
@@ -172,31 +169,26 @@ static int ki_exec_msg(struct sip_msg* msg, str* cmd)
 		}
 	}
 	
-	LM_DBG("executing [%s]\n", cmd->s);
+	if(fixup_get_svalue(msg, (gparam_p)cmd, &command)!=0)
+	{
+		LM_ERR("invalid command parameter");
+		return -1;
+	}
 	
-	ret=exec_msg(msg, cmd->s);
+	LM_DBG("executing [%s]\n", command.s);
+	
+	ret=exec_msg(msg, command.s);
 	if (setvars) {
 		unset_env(backup);
 	}
 	return ret;
 }
 
-static int w_exec_msg(struct sip_msg* msg, char* cmd, char* foo)
-{
-	str command;
-	
-	if(fixup_get_svalue(msg, (gparam_p)cmd, &command)!=0)
-	{
-		LM_ERR("invalid command parameter");
-		return -1;
-	}
-	return ki_exec_msg(msg, &command);
-}
-
-static int w_exec_avp_helper(sip_msg_t* msg, str* cmd, pvname_list_t* avpl)
+inline static int w_exec_avp(struct sip_msg* msg, char* cmd, char* avpl)
 {
 	environment_t *backup;
 	int ret;
+	str command;
 	
 	if(msg==0 || cmd==0)
 		return -1;
@@ -209,31 +201,20 @@ static int w_exec_avp_helper(sip_msg_t* msg, str* cmd, pvname_list_t* avpl)
 			return -1;
 		}
 	}
-	
-	LM_DBG("executing [%s]\n", cmd->s);
-
-	ret=exec_avp(msg, cmd->s, avpl);
-	if (setvars) {
-		unset_env(backup);
-	}
-	return ret;
-}
-
-static int w_exec_avp(struct sip_msg* msg, char* cmd, char* avpl)
-{
-	str command;
 
 	if(fixup_get_svalue(msg, (gparam_p)cmd, &command)!=0)
 	{
 		LM_ERR("invalid command parameter");
 		return -1;
 	}
-	return w_exec_avp_helper(msg, &command, (pvname_list_t*)avpl);
-}
+	
+	LM_DBG("executing [%s]\n", command.s);
 
-static int ki_exec_avp(sip_msg_t* msg, str* cmd)
-{
-	return w_exec_avp_helper(msg, cmd, NULL);
+	ret=exec_avp(msg, command.s, (pvname_list_p)avpl);
+	if (setvars) {
+		unset_env(backup);
+	}
+	return ret;
 }
 
 static int exec_avp_fixup(void** param, int param_no)
@@ -270,36 +251,4 @@ static int exec_avp_fixup(void** param, int param_no)
 	return 0;
 }
 
-/**
- *
- */
-/* clang-format off */
-static sr_kemi_t sr_kemi_exec_exports[] = {
-	{ str_init("exec"), str_init("exec_dset"),
-		SR_KEMIP_INT, ki_exec_dset,
-		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
-			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
-	},
-	{ str_init("exec"), str_init("exec_msg"),
-		SR_KEMIP_INT, ki_exec_msg,
-		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
-			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
-	},
-	{ str_init("exec"), str_init("exec_avp"),
-		SR_KEMIP_INT, ki_exec_avp,
-		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
-			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
-	},
 
-	{ {0, 0}, {0, 0}, 0, NULL, { 0, 0, 0, 0, 0, 0 } }
-};
-/* clang-format on */
-
-/**
- *
- */
-int mod_register(char *path, int *dlflags, void *p1, void *p2)
-{
-	sr_kemi_modules_add(sr_kemi_exec_exports);
-	return 0;
-}
