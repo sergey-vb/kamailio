@@ -1,23 +1,24 @@
-// Kamailio - equivalent of routing blocks in JavaScript
+// Kamailio - equivalent of routing blocks in SQLang
 //
 // KSR - the new dynamic object exporting Kamailio functions
-// sr - the old static object exporting Kamailio functions
 //
 
 // global variables corresponding to defined values (e.g., flags) in kamailio.cfg
-var FLT_ACC=1
-var FLT_ACCMISSED=2
-var FLT_ACCFAILED=3
-var FLT_NATS=5
+local FLAGS = {
+	FLT_ACC=1,
+	FLT_ACCMISSED=2,
+	FLT_ACCFAILED=3,
+	FLT_NATS=5,
 
-var FLB_NATB=6
-var FLB_NATSIPPING=7
+	FLB_NATB=6,
+	FLB_NATSIPPING=7
+}
 
 // SIP request routing
 // equivalent of request_route{}
 function ksr_request_route()
 {
-	var METHOD = KSR.pv.get("$rm");
+	local METHOD = KSR.pv.get("$rm");
 	// KSR.sl.sl_send_reply(100,"Intelligent trying");
 	// KSR.info("===== request - from kamailio lua script\n");
 
@@ -59,7 +60,7 @@ function ksr_request_route()
 
 	// account only INVITEs
 	if (METHOD=="INVITE") {
-		KSR.setflag(FLT_ACC); // do accounting
+		KSR.setflag(FLAGS.FLT_ACC); // do accounting
 	}
 
 	// dispatch requests to foreign domains
@@ -87,7 +88,7 @@ function ksr_route_relay()
 {
 	// enable additional event routes for forwarded requests
 	// - serial forking, RTP relaying handling, a.s.o.
-	var METHOD = KSR.pv.get("$rm");
+	local METHOD = KSR.pv.get("$rm");
 	if (METHOD=="INVITE" || METHOD=="BYE" || METHOD=="SUBSCRIBE"
 			|| METHOD=="UPDATE") {
 		if (KSR.tm.t_is_set("branch_route")<0) {
@@ -133,7 +134,7 @@ function ksr_route_reqinit()
 		}
 	}
 	if (!KSR.pv.is_null("$ua")) {
-		var UA = KSR.pv.get("$ua");
+		local UA = KSR.pv.get("$ua");
 		if (UA.indexOf("friendly-scanner")>=0 || UA.indexOf("sipcli")>=0) {
 			KSR.sl.sl_send_reply(200, "OK");
 			KSR.x.exit();
@@ -165,14 +166,14 @@ function ksr_route_withindlg()
 {
 	if (KSR.siputils.has_totag()<0) { return; }
 
-	var METHOD = KSR.pv.get("$rm");
+	local METHOD = KSR.pv.get("$rm");
 	// sequential request withing a dialog should
 	// take the path determined by record-routing
 	if (KSR.rr.loose_route()>0) {
 		ksr_route_dlguri();
 		if (METHOD=="BYE") {
-			KSR.setflag(FLT_ACC); // do accounting ...
-			KSR.setflag(FLT_ACCFAILED); // ... even if the transaction fails
+			KSR.setflag(FLAGS.FLT_ACC); // do accounting ...
+			KSR.setflag(FLAGS.FLT_ACCFAILED); // ... even if the transaction fails
 		} else if (METHOD=="ACK") {
 			// ACK is forwarded statelessy
 			ksr_route_natmanage();
@@ -203,10 +204,10 @@ function ksr_route_withindlg()
 function ksr_route_registrar()
 {
 	if (KSR.pv.get("$rm")!="REGISTER") { return; }
-	if (KSR.isflagset(FLT_NATS)) {
-		KSR.setbflag(FLB_NATB);
+	if (KSR.isflagset(FLAGS.FLT_NATS)) {
+		KSR.setbflag(FLAGS.FLB_NATB);
 		// do SIP NAT pinging
-		KSR.setbflag(FLB_NATSIPPING);
+		KSR.setbflag(FLAGS.FLB_NATSIPPING);
 	}
 	if (KSR.registrar.save("location", 0)<0) {
 		KSR.sl.sl_reply_error();
@@ -217,7 +218,7 @@ function ksr_route_registrar()
 // User location service
 function ksr_route_location()
 {
-	var rc = KSR.registrar.lookup("location");
+	local rc = KSR.registrar.lookup("location");
 	if (rc<0) {
 		KSR.tm.t_newtran();
 		if (rc==-1 || rc==-3) {
@@ -231,7 +232,7 @@ function ksr_route_location()
 
 	// when routing via usrloc, log the missed calls also
 	if (KSR.pv.get("$rm")=="INVITE") {
-		KSR.setflag(FLT_ACCMISSED);
+		KSR.setflag(FLAGS.FLT_ACCMISSED);
 	}
 
 	ksr_route_relay();
@@ -242,7 +243,7 @@ function ksr_route_location()
 // IP authorization and user uthentication
 function ksr_route_auth()
 {
-	var METHOD = KSR.pv.get("$rm");
+	local METHOD = KSR.pv.get("$rm");
 	if (METHOD!="REGISTER") {
 		if (KSR.permissions.allow_source_address(1)>0) {
 			// source IP allowed
@@ -283,7 +284,7 @@ function ksr_route_natdetect()
 		} else if (KSR.siputils.is_first_hop()>0) {
 			KSR.nathelper.set_contact_alias();
 		}
-		KSR.setflag(FLT_NATS);
+		KSR.setflag(FLAGS.FLT_NATS);
 	}
 	return;
 }
@@ -294,11 +295,11 @@ function ksr_route_natmanage()
 	if (KSR.siputils.is_request()>0) {
 		if (KSR.siputils.has_totag()>0) {
 			if (KSR.rr.check_route_param("nat=yes")>0) {
-				KSR.setbflag(FLB_NATB);
+				KSR.setbflag(FLAGS.FLB_NATB);
 			}
 		}
 	}
-	if (! (KSR.isflagset(FLT_NATS) || KSR.isbflagset(FLB_NATB))) {
+	if (! (KSR.isflagset(FLAGS.FLT_NATS) || KSR.isbflagset(FLAGS.FLB_NATB))) {
 		return;
 	}
 
@@ -312,7 +313,7 @@ function ksr_route_natmanage()
 		}
 	}
 	if (KSR.siputils.is_reply()>0) {
-		if (KSR.isbflagset(FLB_NATB)) {
+		if (KSR.isbflagset(FLAGS.FLB_NATB)) {
 			KSR.nathelper.set_contact_alias();
 		}
 	}
@@ -353,7 +354,7 @@ function ksr_branch_manage()
 function ksr_onreply_manage()
 {
 	KSR.dbg("incoming reply\n");
-	var scode = KSR.pv.get("$rs");
+	local scode = KSR.pv.get("$rs");
 	if (scode>100 && scode<=299) {
 		ksr_route_natmanage();
 	}
