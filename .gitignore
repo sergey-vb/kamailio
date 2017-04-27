@@ -24,7 +24,6 @@ modules.lst
 # tags
 tags
 TAGS
-.tags*
 # vi swaps
 .*.swp
 .*.swo
