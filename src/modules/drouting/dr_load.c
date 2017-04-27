@@ -38,8 +38,6 @@
 //#include "../../core/db/db.h"
 #include "../../core/mem/shm_mem.h"
 
-#include "../keepalive/api.h"
-
 #include "dr_load.h"
 #include "routing.h"
 #include "prefix_tree.h"
@@ -131,7 +129,6 @@ static struct dr_gwl_tmp* dr_gw_lists = NULL;
 	} while(0)
 
 extern int dr_fetch_rows;
-extern keepalive_api_t keepalive_api;
 
 
 static int add_tmp_gw_list(unsigned int id, char *list)
