@@ -306,10 +306,8 @@ inline static int update_totag_set(struct cell *t, struct sip_msg *ok)
 		}
 	}
 	/* that's a new to-tag -- record it */
-	shm_lock();
-	n=(struct totag_elem*) shm_malloc_unsafe(sizeof(struct totag_elem));
-	s=(char *)shm_malloc_unsafe(tag->len);
-	shm_unlock();
+	n=(struct totag_elem*) shm_malloc(sizeof(struct totag_elem));
+	s=(char *)shm_malloc(tag->len);
 	if (!s || !n) {
 		LM_ERR("no more shm memory \n");
 		if (n) shm_free(n);
@@ -517,7 +515,7 @@ static int _reply_light( struct cell *trans, char* buf, unsigned int len,
 		} else {
 			if(unlikely(has_tran_tmcbs(trans, TMCB_RESPONSE_READY))) {
 				run_trans_callbacks_with_buf(TMCB_RESPONSE_READY, rb,
-					trans->uas.request, FAKED_REPLY, code);
+					trans->uas.request, FAKED_REPLY, TMCB_NONE_F);
 			}
 		}
 		cleanup_uac_timers( trans );
@@ -534,7 +532,7 @@ static int _reply_light( struct cell *trans, char* buf, unsigned int len,
 	if (code==100) {
 		if(unlikely(has_tran_tmcbs(trans, TMCB_REQUEST_PENDING)))
 			run_trans_callbacks_with_buf(TMCB_REQUEST_PENDING, rb,
-					trans->uas.request, FAKED_REPLY, code);
+					trans->uas.request, FAKED_REPLY, TMCB_NONE_F);
 	}
 
 	/* send it out */
@@ -666,36 +664,55 @@ static int _reply( struct cell *trans, struct sip_msg* p_msg,
 	}
 }
 
+/**
+ * structure to backup attributes for faked env
+ */
+typedef struct tm_faked_env {
+	int backup_route_type;
+	struct cell *backup_t;
+	int backup_branch;
+	unsigned int backup_msgid;
+	avp_list_t* backup_user_from;
+	avp_list_t* backup_user_to;
+	avp_list_t* backup_domain_from;
+	avp_list_t* backup_domain_to;
+	avp_list_t* backup_uri_from;
+	avp_list_t* backup_uri_to;
+#ifdef WITH_XAVP
+	sr_xavp_t **backup_xavps;
+#endif
+	struct socket_info* backup_si;
+	struct lump *backup_add_rm;
+	struct lump *backup_body_lumps;
+	struct lump_rpl *backup_reply_lump;
+} tm_faked_env_t;
+
+#define TM_FAKED_ENV_SIZE	8
+/**
+ * stack of faked environments
+ */
+static tm_faked_env_t _tm_faked_env[TM_FAKED_ENV_SIZE];
+static int _tm_faked_env_idx = -1;
+
 /** create or restore a "fake environment" for running a failure_route,
  * OR an "async environment" depending on is_async_value (0=std failure-faked, 1=async)
  * if msg is set -> it will fake the env. vars conforming with the msg; if NULL
  * the env. will be restore to original.
  * Side-effect: mark_ruri_consumed() for faked env only.
  */
-void faked_env(struct cell *t, struct sip_msg *msg, int is_async_env) {
-	static int backup_route_type;
-	static struct cell *backup_t;
-	static int backup_branch;
-	static unsigned int backup_msgid;
-	static avp_list_t* backup_user_from, *backup_user_to;
-	static avp_list_t* backup_domain_from, *backup_domain_to;
-	static avp_list_t* backup_uri_from, *backup_uri_to;
-#ifdef WITH_XAVP
-	static sr_xavp_t **backup_xavps;
-#endif
-	static struct socket_info* backup_si;
-
-	static struct lump *backup_add_rm;
-	static struct lump *backup_body_lumps;
-	static struct lump_rpl *backup_reply_lump;
-
-
+int faked_env(struct cell *t, struct sip_msg *msg, int is_async_env)
+{
 	if (msg) {
+		if(_tm_faked_env_idx+1>=TM_FAKED_ENV_SIZE) {
+			LM_ERR("too many faked environments on stack\n");
+			return -1;
+		}
+		_tm_faked_env_idx++;
 		/* remember we are back in request processing, but process
 		 * a shmem-ed replica of the request; advertise it in route type;
 		 * for example t_reply needs to know that
 		 */
-		backup_route_type = get_route_type();
+		_tm_faked_env[_tm_faked_env_idx].backup_route_type = get_route_type();
 
 		if (is_async_env) {
 			set_route_type(t->async_backup.backup_route);
@@ -718,9 +735,9 @@ void faked_env(struct cell *t, struct sip_msg *msg, int is_async_env) {
 		 */
 
 		/* backup */
-		backup_t = get_t();
-		backup_branch = get_t_branch();
-		backup_msgid = global_msg_id;
+		_tm_faked_env[_tm_faked_env_idx].backup_t = get_t();
+		_tm_faked_env[_tm_faked_env_idx].backup_branch = get_t_branch();
+		_tm_faked_env[_tm_faked_env_idx].backup_msgid = global_msg_id;
 		/* fake transaction and message id */
 		global_msg_id = msg->id;
 
@@ -731,49 +748,75 @@ void faked_env(struct cell *t, struct sip_msg *msg, int is_async_env) {
 		}
 
 		/* make available the avp list from transaction */
-		backup_uri_from = set_avp_list(AVP_TRACK_FROM | AVP_CLASS_URI,
-				&t->uri_avps_from);
-		backup_uri_to = set_avp_list(AVP_TRACK_TO | AVP_CLASS_URI,
-				&t->uri_avps_to);
-		backup_user_from = set_avp_list(AVP_TRACK_FROM | AVP_CLASS_USER,
-				&t->user_avps_from);
-		backup_user_to = set_avp_list(AVP_TRACK_TO | AVP_CLASS_USER,
-				&t->user_avps_to);
-		backup_domain_from = set_avp_list(AVP_TRACK_FROM | AVP_CLASS_DOMAIN,
-				&t->domain_avps_from);
-		backup_domain_to = set_avp_list(AVP_TRACK_TO | AVP_CLASS_DOMAIN,
-				&t->domain_avps_to);
+		_tm_faked_env[_tm_faked_env_idx].backup_uri_from
+				= set_avp_list(AVP_TRACK_FROM | AVP_CLASS_URI,
+						&t->uri_avps_from);
+		_tm_faked_env[_tm_faked_env_idx].backup_uri_to
+				= set_avp_list(AVP_TRACK_TO | AVP_CLASS_URI,
+					&t->uri_avps_to);
+		_tm_faked_env[_tm_faked_env_idx].backup_user_from
+				= set_avp_list(AVP_TRACK_FROM | AVP_CLASS_USER,
+					&t->user_avps_from);
+		_tm_faked_env[_tm_faked_env_idx].backup_user_to
+				= set_avp_list(AVP_TRACK_TO | AVP_CLASS_USER,
+					&t->user_avps_to);
+		_tm_faked_env[_tm_faked_env_idx].backup_domain_from
+				= set_avp_list(AVP_TRACK_FROM | AVP_CLASS_DOMAIN,
+					&t->domain_avps_from);
+		_tm_faked_env[_tm_faked_env_idx].backup_domain_to
+				= set_avp_list(AVP_TRACK_TO | AVP_CLASS_DOMAIN,
+					&t->domain_avps_to);
 #ifdef WITH_XAVP
-		backup_xavps = xavp_set_list(&t->xavps_list);
+		_tm_faked_env[_tm_faked_env_idx].backup_xavps
+				= xavp_set_list(&t->xavps_list);
 #endif
 		/* set default send address to the saved value */
-		backup_si = bind_address;
+		_tm_faked_env[_tm_faked_env_idx].backup_si = bind_address;
 		bind_address = t->uac[0].request.dst.send_sock;
 		/* backup lump lists */
-		backup_add_rm = t->uas.request->add_rm;
-		backup_body_lumps = t->uas.request->body_lumps;
-		backup_reply_lump = t->uas.request->reply_lump;
+		_tm_faked_env[_tm_faked_env_idx].backup_add_rm
+				= t->uas.request->add_rm;
+		_tm_faked_env[_tm_faked_env_idx].backup_body_lumps
+				= t->uas.request->body_lumps;
+		_tm_faked_env[_tm_faked_env_idx].backup_reply_lump
+				= t->uas.request->reply_lump;
 	} else {
+		if(_tm_faked_env_idx<0) {
+			LM_ERR("no faked environments on stack\n");
+			return -1;
+		}
 		/* restore original environment */
-		set_t(backup_t, backup_branch);
-		global_msg_id = backup_msgid;
-		set_route_type(backup_route_type);
+		set_t(_tm_faked_env[_tm_faked_env_idx].backup_t,
+				_tm_faked_env[_tm_faked_env_idx].backup_branch);
+		global_msg_id = _tm_faked_env[_tm_faked_env_idx].backup_msgid;
+		set_route_type(_tm_faked_env[_tm_faked_env_idx].backup_route_type);
 		/* restore original avp list */
-		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_USER, backup_user_from);
-		set_avp_list(AVP_TRACK_TO | AVP_CLASS_USER, backup_user_to);
-		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_DOMAIN, backup_domain_from);
-		set_avp_list(AVP_TRACK_TO | AVP_CLASS_DOMAIN, backup_domain_to);
-		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_URI, backup_uri_from);
-		set_avp_list(AVP_TRACK_TO | AVP_CLASS_URI, backup_uri_to);
+		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_USER,
+				_tm_faked_env[_tm_faked_env_idx].backup_user_from);
+		set_avp_list(AVP_TRACK_TO | AVP_CLASS_USER,
+				_tm_faked_env[_tm_faked_env_idx].backup_user_to);
+		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_DOMAIN,
+				_tm_faked_env[_tm_faked_env_idx].backup_domain_from);
+		set_avp_list(AVP_TRACK_TO | AVP_CLASS_DOMAIN,
+				_tm_faked_env[_tm_faked_env_idx].backup_domain_to);
+		set_avp_list(AVP_TRACK_FROM | AVP_CLASS_URI,
+				_tm_faked_env[_tm_faked_env_idx].backup_uri_from);
+		set_avp_list(AVP_TRACK_TO | AVP_CLASS_URI,
+				_tm_faked_env[_tm_faked_env_idx].backup_uri_to);
 #ifdef WITH_XAVP
-		xavp_set_list(backup_xavps);
+		xavp_set_list(_tm_faked_env[_tm_faked_env_idx].backup_xavps);
 #endif
-		bind_address = backup_si;
+		bind_address = _tm_faked_env[_tm_faked_env_idx].backup_si;
 		/* restore lump lists */
-		t->uas.request->add_rm = backup_add_rm;
-		t->uas.request->body_lumps = backup_body_lumps;
-		t->uas.request->reply_lump = backup_reply_lump;
+		t->uas.request->add_rm
+				= _tm_faked_env[_tm_faked_env_idx].backup_add_rm;
+		t->uas.request->body_lumps
+				= _tm_faked_env[_tm_faked_env_idx].backup_body_lumps;
+		t->uas.request->reply_lump
+				= _tm_faked_env[_tm_faked_env_idx].backup_reply_lump;
+		_tm_faked_env_idx--;
 	}
+	return 0;
 }
 
 /**
@@ -1072,8 +1115,8 @@ inline static short int get_4xx_prio(unsigned char xx)
 /* returns response priority, lower number => highest prio
  *
  * responses                    priority val
- *  0-99                        32000+reponse         (special)
- *  1xx                         11000+reponse         (special)
+ *  0-99                        32000+response        (special)
+ *  1xx                         11000+response        (special)
  *  700-999                     10000+response        (very low)
  *  5xx                          5000+xx              (low)
  *  4xx                          4000+xx
@@ -1534,7 +1577,9 @@ int t_retransmit_reply( struct cell *t )
 	}
 	memcpy( b, t->uas.response.buffer, len );
 	UNLOCK_REPLIES( t );
-	SEND_PR_BUFFER( & t->uas.response, b, len );
+	if(SEND_PR_BUFFER( & t->uas.response, b, len )<0) {
+		LM_WARN("send pr buffer failed\n");
+	}
 	if (unlikely(has_tran_tmcbs(t, TMCB_RESPONSE_SENT))){
 		/* we don't know if it's a retransmission of a local reply or a
 		 * forwarded reply */
@@ -1901,7 +1946,7 @@ enum rps relay_reply( struct cell *t, struct sip_msg *p_msg, int branch,
 	if (relay >= 0) {
 		if (unlikely(!totag_retr && has_tran_tmcbs(t, TMCB_RESPONSE_READY))){
 			run_trans_callbacks_with_buf(TMCB_RESPONSE_READY, uas_rb,
-					t->uas.request, relayed_msg, relayed_code);
+					t->uas.request, relayed_msg, TMCB_NONE_F);
 		}
 		/* Set retransmission timer before the reply is sent out to avoid
 		* race conditions
@@ -1933,8 +1978,10 @@ enum rps relay_reply( struct cell *t, struct sip_msg *p_msg, int branch,
 				if (unlikely(!totag_retr
 							&& has_tran_tmcbs(t, TMCB_RESPONSE_OUT))){
 					LOCK_REPLIES( t );
-					run_trans_callbacks_with_buf( TMCB_RESPONSE_OUT, uas_rb,
-							t->uas.request, relayed_msg, relayed_code);
+					if(relayed_code==uas_rb->activ_type) {
+						run_trans_callbacks_with_buf( TMCB_RESPONSE_OUT, uas_rb,
+								t->uas.request, relayed_msg, TMCB_NONE_F);
+					}
 					UNLOCK_REPLIES( t );
 				}
 				if (unlikely(has_tran_tmcbs(t, TMCB_RESPONSE_SENT))){
@@ -2130,18 +2177,25 @@ int reply_received( struct sip_msg  *p_msg )
 	sr_kemi_eng_t *keng = NULL;
 
 	/* make sure we know the associated transaction ... */
-	if (t_check( p_msg  , &branch )==-1)
+	branch = T_BR_UNDEFINED;
+	if (t_check(p_msg , &branch)==-1)
 		goto trans_not_found;
 	/*... if there is none, tell the core router to fwd statelessly */
 	t=get_t();
-	if ( (t==0)||(t==T_UNDEFINED))
+	if ( (t==0)||(t==T_UNDEFINED)) {
+		LM_DBG("transaction not found - (branch %d)\n", branch);
 		goto trans_not_found;
+	}
+	if (unlikely(branch==T_BR_UNDEFINED)) {
+		LM_CRIT("BUG: transaction found, but no branch matched\n");
+		/* t_check() referenced the transaction */
+		t_unref(p_msg);
+		goto trans_not_found;
+	}
 
 	/* if transaction found, increment the rpl_received counter */
 	t_stats_rpl_received();
 
-	if (unlikely(branch==T_BR_UNDEFINED))
-		LM_CRIT("BUG: invalid branch - report to developers\n");
 	tm_ctx_set_branch_index(branch);
 	init_cancel_info(&cancel_data);
 	msg_status=p_msg->REPLY_STATUS;
@@ -2452,6 +2506,7 @@ int reply_received( struct sip_msg  *p_msg )
 		replies_locked=1;
 	}
 	if ( is_local(t) ) {
+		/* local_reply() does UNLOCK_REPLIES( t ) */
 		reply_status=local_reply( t, p_msg, branch, msg_status, &cancel_data );
 		replies_locked=0;
 		if (reply_status == RPS_COMPLETED) {
@@ -2469,6 +2524,7 @@ int reply_received( struct sip_msg  *p_msg )
 			cancel_uacs(t, &cancel_data, cfg_get(tm,tm_cfg, cancel_b_flags));
 		}
 	} else {
+		/* relay_reply() does UNLOCK_REPLIES( t ) */
 		reply_status=relay_reply( t, p_msg, branch, msg_status,
 									&cancel_data, 1 );
 		replies_locked=0;

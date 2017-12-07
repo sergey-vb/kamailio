@@ -1,8 +1,7 @@
 %define name    kamailio
 %define ver 5.1.0
-%define rel dev1%{dist}
+%define rel dev6%{dist}
 %bcond_with dnssec
-%bcond_with kazoo
 
 
 
@@ -23,9 +22,8 @@ Conflicts:  kamailio-dialplan < %ver, kamailio-dnssec < %ver
 Conflicts:  kamailio-geoip < %ver, kamailio-gzcompress < %ver
 Conflicts:  kamailio-ims < %ver, kamailio-java < %ver, kamailio-json < %ver
 Conflicts:  kamailio-lcr < %ver, kamailio-ldap < %ver, kamailio-lua < %ver
-%if %{with kazoo}
 Conflicts:  kamailio-kazoo < %ver
-%endif
+Conflicts:  kamailio-rabbitmq < %ver
 Conflicts:  kamailio-memcached < %ver, kamailio-mysql < %ver
 Conflicts:  kamailio-outbound < %ver, kamailio-perl < %ver
 Conflicts:  kamailio-postgresql < %ver, kamailio-presence < %ver
@@ -38,6 +36,7 @@ Conflicts:  kamailio-utils < %ver, kamailio-websocket < %ver
 Conflicts:  kamailio-xhttp-pi < %ver, kamailio-xmlops < %ver
 Conflicts:  kamailio-xmlrpc < %ver, kamailio-xmpp < %ver
 Conflicts:  kamailio-uuid < %ver
+Conflicts:  kamailio-sqlang < %ver
 BuildRequires:  bison, flex, gcc, make, redhat-rpm-config
 
 %description
@@ -192,7 +191,6 @@ This module implements protocol functions that use the libcurl to communicate wi
 %package    http_client
 Summary:    HTTP client module for Kamailio.
 Group:      System Environment/Daemons
-Requires:   libcrypto
 
 %description    http_client
 This module implements protocol functions that use the libcurl to communicate with HTTP servers. 
@@ -227,16 +225,24 @@ BuildRequires:  json-c-devel, libevent-devel
 json string handling and RPC modules for Kamailio.
 
 
-%if %{with kazoo}
 %package    kazoo
 Summary:    Kazoo middle layer connector support for Kamailio
 Group:      System Environment/Daemons
-Requires:   libuuid, rabbitmq-c, json-c, libevent, kamailio = %ver
-BuildRequires:  libuuid-devel, rabbitmq-c-devel, json-c-devel, libevent-devel
+Requires:   libuuid, librabbitmq, json-c, libevent, kamailio = %ver
+BuildRequires:  libuuid-devel, librabbitmq-devel, json-c-devel, libevent-devel
 
 %description    kazoo
 Kazoo module for Kamailio.
-%endif
+
+
+%package    rabbitmq
+Summary:    RabbitMQ related modules
+Group:      System Environment/Daemons
+Requires:   uuid, librabbitmq, kamailio = %ver
+BuildRequires:    librabbitmq-devel, uuid-devel
+
+%description    rabbitmq
+RabbitMQ module for Kamailio.
 
 
 %package    lcr
@@ -552,6 +558,14 @@ BuildRequires:  libuuid-devel
 %description    uuid
 UUID module for Kamailio.
 
+%package        sqlang
+Summary:        Squirrel Language (SQLang) for Kamailio
+Group:          System Environment/Daemons
+Requires:       squirrel-libs, kamailio = %version
+BuildRequires:  squirrel-devel gcc-c++
+
+%description    sqlang
+app_sqlang module for Kamailio.
 
 %prep
 %setup -n %{name}-%{ver}
@@ -569,10 +583,7 @@ make every-module skip_modules="app_mono db_cassandra db_oracle iptrtpproxy \
     kdnssec \
 %endif
     kgeoip kgzcompress khttp_async kims kjansson kjson kjsonrpcs \
-%if %{with kazoo}
-    kkazoo \
-%endif
-    kldap klua kmemcached \
+    kkazoo krabbitmq kldap klua kmemcached \
     kmi_xmlrpc kmysql koutbound kperl kpostgres kpresence kpython \
     kradius kredis ksctp ksnmpstats ksqlite ktls kunixodbc kutils \
     kwebsocket kxml kxmpp kuuid"
@@ -592,10 +603,7 @@ make install-modules-all skip_modules="app_mono db_cassandra db_oracle \
     kdnssec \
 %endif
     kgeoip kgzcompress khttp_async kims kjansson kjson kjsonrpcs \
-%if %{with kazoo}
-    kkazoo \
-%endif
-    kldap klua kmemcached \
+    kkazoo krabbitmq kldap klua kmemcached \
     kmi_xmlrpc kmysql koutbound kperl kpostgres kpresence kpython \
     kradius kredis ksctp ksnmpstats ksqlite ktls kunixodbc kutils \
     kwebsocket kxml kxmpp kuuid"
@@ -659,6 +667,7 @@ fi
 
 %dir %{_docdir}/kamailio/modules
 %doc %{_docdir}/kamailio/modules/README.acc
+%doc %{_docdir}/kamailio/modules/README.acc_diameter
 %doc %{_docdir}/kamailio/modules/README.alias_db
 %doc %{_docdir}/kamailio/modules/README.app_jsdt
 %doc %{_docdir}/kamailio/modules/README.async
@@ -767,6 +776,9 @@ fi
 %doc %{_docdir}/kamailio/modules/README.jsonrpcs
 %doc %{_docdir}/kamailio/modules/README.nosip
 %doc %{_docdir}/kamailio/modules/README.tsilo
+%doc %{_docdir}/kamailio/modules/README.call_obj
+%doc %{_docdir}/kamailio/modules/README.evrexec
+%doc %{_docdir}/kamailio/modules/README.keepalive
 
 
 %dir %attr(-,kamailio,kamailio) %{_sysconfdir}/kamailio
@@ -798,6 +810,7 @@ fi
 
 %dir %{_libdir}/kamailio/modules
 %{_libdir}/kamailio/modules/acc.so
+%{_libdir}/kamailio/modules/acc_diameter.so
 %{_libdir}/kamailio/modules/alias_db.so
 %{_libdir}/kamailio/modules/app_jsdt.so
 %{_libdir}/kamailio/modules/async.so
@@ -906,7 +919,9 @@ fi
 %{_libdir}/kamailio/modules/jsonrpcs.so
 %{_libdir}/kamailio/modules/nosip.so
 %{_libdir}/kamailio/modules/tsilo.so
-
+%{_libdir}/kamailio/modules/call_obj.so
+%{_libdir}/kamailio/modules/evrexec.so
+%{_libdir}/kamailio/modules/keepalive.so
 
 %{_sbindir}/kamailio
 %{_sbindir}/kamctl
@@ -1037,6 +1052,7 @@ fi
 %doc %{_docdir}/kamailio/modules/README.ims_registrar_pcscf
 %doc %{_docdir}/kamailio/modules/README.ims_registrar_scscf
 %doc %{_docdir}/kamailio/modules/README.ims_usrloc_pcscf
+%doc %{_docdir}/kamailio/modules/README.ims_diameter_server
 %doc %{_docdir}/kamailio/modules/README.log_custom
 %doc %{_docdir}/kamailio/modules/README.smsops
 %doc %{_docdir}/kamailio/modules/README.statsc
@@ -1056,6 +1072,7 @@ fi
 %{_libdir}/kamailio/modules/ims_registrar_scscf.so
 %{_libdir}/kamailio/modules/ims_usrloc_pcscf.so
 %{_libdir}/kamailio/modules/ims_usrloc_scscf.so
+%{_libdir}/kamailio/modules/ims_diameter_server.so
 %{_libdir}/kamailio/modules/log_custom.so
 %{_libdir}/kamailio/modules/smsops.so
 %{_libdir}/kamailio/modules/statsc.so
@@ -1077,12 +1094,16 @@ fi
 %{_libdir}/kamailio/modules/jsonrpcc.so
 
 
-%if %{with kazoo}
 %files      kazoo
 %defattr(-,root,root)
 %doc %{_docdir}/kamailio/modules/README.kazoo
 %{_libdir}/kamailio/modules/kazoo.so
-%endif
+
+
+%files      rabbitmq
+%defattr(-,root,root)
+%doc %{_docdir}/kamailio/modules/README.rabbitmq
+%{_libdir}/kamailio/modules/rabbitmq.so
 
 
 %files      lcr
@@ -1230,7 +1251,9 @@ fi
 %files      redis
 %defattr(-,root,root)
 %doc %{_docdir}/kamailio/modules/README.ndb_redis
+%doc %{_docdir}/kamailio/modules/README.topos_redis
 %{_libdir}/kamailio/modules/ndb_redis.so
+%{_libdir}/kamailio/modules/topos_redis.so
 
 
 %files      regex
@@ -1341,8 +1364,21 @@ fi
 %doc %{_docdir}/kamailio/modules/README.uuid
 %{_libdir}/kamailio/modules/uuid.so
 
+%files          sqlang
+%defattr(-,root,root)
+%doc %{_docdir}/kamailio/modules/README.app_sqlang
+%{_libdir}/kamailio/modules/app_sqlang.so
 
 %changelog
+* Mon Jul 31 2017 Mititelu Stefan <stefan.mititelu92@gmail.com>
+   - added rabbitmq module
+* Wed Apr 26 2017 Carsten Bock <carsten@ng-voice.co,>
+  - added ims_diameter_server module
+  - added topos_redis module
+  - added call_obj module
+  - added evrexec module
+  - added keepalive module
+  - added app_sqlang module
 * Thu Mar 09 2017 Federico Cabiddu <federico.cabiddu@gmail.com>
   - Updated version to 5.1.0-dev1
 * Thu Mar 09 2017 Federico Cabiddu <federico.cabiddu@gmail.com>

@@ -90,7 +90,7 @@ int uac_init(void)
 	}
 
 	/* calculate the initial From tag */
-	src[0].s = "Long live SER server";
+	src[0].s = "Long live " NAME " server";
 	src[0].len = strlen(src[0].s);
 	src[1].s = si->address_str.s;
 	src[1].len = strlen(src[1].s);
@@ -221,7 +221,7 @@ static inline int t_run_local_req(
 		uac_req_t *uac_r,
 		struct cell *new_cell, struct retr_buf *request)
 {
-	static struct sip_msg lreq;
+	struct sip_msg lreq = {0};
 	struct onsend_info onsnd_info;
 	tm_xlinks_t backup_xd;
 	int sflag_bk;
@@ -715,7 +715,7 @@ int t_uac_with_ids(uac_req_t *uac_r,
 	}
 
 	if (is_ack) {
-		if (cell) free_cell(cell);
+		free_cell(cell);
 		if (ret_index && ret_label)
 			*ret_index = *ret_label = 0;
 	} else {

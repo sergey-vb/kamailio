@@ -34,6 +34,7 @@
 #include "../../core/shm_init.h"
 #include "../../core/script_cb.h"
 #include "../../core/msg_translator.h"
+#include "../../core/kemi.h"
 
 #include "debugger_api.h"
 #include "debugger_config.h"
@@ -546,9 +547,11 @@ static int w_dbg_sip_msg(struct sip_msg* msg, char *level, char *facility)
 	}
 
 	/* skip original uri */
-	if (msg->new_uri.s){
-		orig_offs=msg->first_line.u.request.uri.s - msg->buf;
-		orig_offs=msg->first_line.u.request.uri.len;
+	if(msg->first_line.type == SIP_REQUEST) {
+		if(msg->new_uri.s) {
+			orig_offs = msg->first_line.u.request.uri.s - msg->buf;
+			orig_offs += msg->first_line.u.request.uri.len;
+		}
 	}
 
 	/* alloc private mem and copy lumps */
@@ -589,4 +592,51 @@ static int w_dbg_sip_msg(struct sip_msg* msg, char *level, char *facility)
 	}
 
 	return 1;
+}
+
+/**
+ * dump pv_cache contents as json with default parameters
+ */
+static int ki_dbg_pv_dump(sip_msg_t* msg)
+{
+	dbg_dump_json(msg, DBG_DP_ALL, L_DBG);
+	return 1;
+}
+
+/**
+ * dump pv_cache contents as json with explicit parameters
+ */
+static int ki_dbg_pv_dump_ex(sip_msg_t* msg, int mask, int level)
+{
+	dbg_dump_json(msg, (unsigned int)mask, level);
+	return 1;
+}
+
+/**
+ *
+ */
+/* clang-format off */
+static sr_kemi_t sr_kemi_debugger_exports[] = {
+	{ str_init("debugger"), str_init("dbg_pv_dump"),
+		SR_KEMIP_INT, ki_dbg_pv_dump,
+		{ SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("debugger"), str_init("dbg_pv_dump_ex"),
+		SR_KEMIP_INT, ki_dbg_pv_dump_ex,
+		{ SR_KEMIP_INT, SR_KEMIP_INT, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+
+	{ {0, 0}, {0, 0}, 0, NULL, { 0, 0, 0, 0, 0, 0 } }
+};
+/* clang-format on */
+
+/**
+ *
+ */
+int mod_register(char *path, int *dlflags, void *p1, void *p2)
+{
+	sr_kemi_modules_add(sr_kemi_debugger_exports);
+	return 0;
 }

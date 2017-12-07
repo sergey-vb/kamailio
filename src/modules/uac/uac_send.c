@@ -42,7 +42,7 @@
 #include "uac_send.h"
 
 #define MAX_UACH_SIZE 2048
-#define MAX_UACB_SIZE 4086
+#define MAX_UACB_SIZE 32768
 #define MAX_UACD_SIZE 128
 
 /** TM bind */
@@ -816,6 +816,11 @@ int uac_req_send(void)
 }
 
 int w_uac_req_send(struct sip_msg *msg, char *s1, char *s2)
+{
+	return uac_req_send();
+}
+
+int ki_uac_req_send(sip_msg_t *msg)
 {
 	return uac_req_send();
 }

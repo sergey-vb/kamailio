@@ -60,6 +60,8 @@
 #include <mem/dmalloc.h>
 #endif
 
+int _sr_ip_free_bind = 0;
+
 unsigned int msg_no=0;
 /* address preset vars */
 str default_global_address={0,0};
@@ -131,6 +133,7 @@ int receive_msg(char* buf, unsigned int len, struct receive_info* rcv_info)
 	str inb;
 	sr_net_info_t netinfo;
 	sr_kemi_eng_t *keng = NULL;
+	sr_event_param_t evp = {0};
 
 	if(sr_event_enabled(SREV_NET_DATA_RECV)) {
 		if(sip_check_fline(buf, len)==0) {
@@ -138,13 +141,16 @@ int receive_msg(char* buf, unsigned int len, struct receive_info* rcv_info)
 			netinfo.data.s = buf;
 			netinfo.data.len = len;
 			netinfo.rcv = rcv_info;
-			sr_event_exec(SREV_NET_DATA_RECV, (void*)&netinfo);
+			evp.data = (void*)&netinfo;
+			sr_event_exec(SREV_NET_DATA_RECV, &evp);
 		}
 	}
 
 	inb.s = buf;
 	inb.len = len;
-	sr_event_exec(SREV_NET_DATA_IN, (void*)&inb);
+	evp.data = (void*)&inb;
+	evp.rcv = rcv_info;
+	sr_event_exec(SREV_NET_DATA_IN, &evp);
 	len = inb.len;
 
 	msg=pkg_malloc(sizeof(struct sip_msg));
@@ -172,7 +178,8 @@ int receive_msg(char* buf, unsigned int len, struct receive_info* rcv_info)
 	if(likely(sr_msg_time==1)) msg_set_time(msg);
 
 	if (parse_msg(buf,len, msg)!=0){
-		if((ret=sr_event_exec(SREV_RCV_NOSIP, (void*)msg))<NONSIP_MSG_DROP) {
+		evp.data = (void*)msg;
+		if((ret=sr_event_exec(SREV_RCV_NOSIP, &evp))<NONSIP_MSG_DROP) {
 			LOG(cfg_get(core, core_cfg, corelog),
 				"core parsing of SIP message failed (%s:%d/%d)\n",
 				ip_addr2a(&msg->rcv.src_ip), (int)msg->rcv.src_port,
@@ -182,7 +189,9 @@ int receive_msg(char* buf, unsigned int len, struct receive_info* rcv_info)
 		else if(ret == NONSIP_MSG_DROP) goto error02;
 	}
 
-	parse_headers(msg, HDR_FROM_F|HDR_TO_F|HDR_CALLID_F|HDR_CSEQ_F, 0);
+	if(parse_headers(msg, HDR_FROM_F|HDR_TO_F|HDR_CALLID_F|HDR_CSEQ_F, 0)<0) {
+		LM_WARN("parsing relevant headers failed\n");
+	}
 	LM_DBG("--- received sip message - %s - call-id: [%.*s] - cseq: [%.*s]\n",
 			(msg->first_line.type==SIP_REQUEST)?"request":"reply",
 			(msg->callid && msg->callid->body.s)?msg->callid->body.len:0,
@@ -360,11 +369,7 @@ end:
 #ifdef STATS
 	skipped = 0;
 #endif
-	/* free possible loaded avps -bogdan */
-	reset_avps();
-#ifdef WITH_XAVP
-	xavp_reset_list();
-#endif
+	ksr_msg_env_reset();
 	LM_DBG("cleaning up\n");
 	free_sip_msg(msg);
 	pkg_free(msg);
@@ -379,10 +384,6 @@ end:
 error_rpl:
 	/* execute post reply-script callbacks */
 	exec_post_script_cb(msg, ONREPLY_CB_TYPE);
-	reset_avps();
-#ifdef WITH_XAVP
-	xavp_reset_list();
-#endif
 	goto error02;
 #endif /* NO_ONREPLY_ROUTE_ERROR */
 error_req:
@@ -390,18 +391,25 @@ error_req:
 	/* execute post request-script callbacks */
 	exec_post_script_cb(msg, REQUEST_CB_TYPE);
 error03:
-	/* free possible loaded avps -bogdan */
-	reset_avps();
-#ifdef WITH_XAVP
-	xavp_reset_list();
-#endif
 error02:
 	free_sip_msg(msg);
 	pkg_free(msg);
 error00:
+	ksr_msg_env_reset();
 	STATS_RX_DROPS;
 	/* reset log prefix */
 	log_prefix_set(NULL);
 	return -1;
 }
 
+/**
+ * clean up msg environment, such as avp and xavp lists
+ */
+void ksr_msg_env_reset(void)
+{
+	reset_avps();
+#ifdef WITH_XAVP
+	xavp_reset_list();
+#endif
+
+}

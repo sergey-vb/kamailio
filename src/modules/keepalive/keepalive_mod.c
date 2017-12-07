@@ -34,6 +34,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "../../core/mod_fix.h"
+#include "../../core/kemi.h"
+
 #include "../tm/tm_load.h"
 #include "../dispatcher/api.h"
 
@@ -50,7 +53,7 @@ int ka_init_rpc(void);
 int ka_alloc_destinations_list();
 extern void ka_check_timer(unsigned int ticks, void *param);
 
-static int cmd_is_alive(struct sip_msg *msg, char *str1, char *str2);
+static int w_cmd_is_alive(struct sip_msg *msg, char *str1, char *str2);
 
 extern struct tm_binds tmb;
 
@@ -59,8 +62,8 @@ ka_destinations_list_t *ka_destinations_list = NULL;
 
 
 static cmd_export_t cmds[] = {
-	{"is_alive", (cmd_function)cmd_is_alive, 1, 0, 0,
-			REQUEST_ROUTE | FAILURE_ROUTE | ONREPLY_ROUTE},
+	{"is_alive", (cmd_function)w_cmd_is_alive, 1,
+			fixup_spve_null, 0, ANY_ROUTE},
 	// internal API
 	{"bind_keepalive", (cmd_function)bind_keepalive, 0, 0, 0, 0},
 	{0, 0, 0, 0, 0, 0}
@@ -151,7 +154,7 @@ static int ka_mod_add_destination(modparam_t type, void *val)
 	str owner = str_init("_params");
 	LM_DBG("adding destination %.*s\n", dest.len, dest.s);
 
-	return ka_add_dest(dest, owner, 0, 0, 0);
+	return ka_add_dest(&dest, &owner, 0, 0, 0);
 }
 
 /*
@@ -176,11 +179,8 @@ int ka_alloc_destinations_list()
 	return 0;
 }
 
-
-static int cmd_is_alive(struct sip_msg *msg, char *str1, char *str2)
+static int ki_is_alive(sip_msg_t *msg, str *dest)
 {
-	str dest = {str1, strlen(str1)};
-
 	ka_state state = ka_destination_state(dest);
 	// must not return 0, as it stops dialplan execution
 	if(state == KA_STATE_UNKNOWN) {
@@ -188,4 +188,39 @@ static int cmd_is_alive(struct sip_msg *msg, char *str1, char *str2)
 	}
 
 	return state;
+}
+
+static int w_cmd_is_alive(struct sip_msg *msg, char *str1, char *str2)
+{
+	str dest = STR_NULL;
+
+	if(fixup_get_svalue(msg, (gparam_t*)str1, &dest)!=0) {
+		LM_ERR("failed to get dest parameter\n");
+		return -1;
+	}
+	return ki_is_alive(msg, &dest);
+}
+
+/**
+ *
+ */
+/* clang-format off */
+static sr_kemi_t sr_kemi_keepalive_exports[] = {
+	{ str_init("keepalive"), str_init("is_alive"),
+		SR_KEMIP_INT, ki_is_alive,
+		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+
+	{ {0, 0}, {0, 0}, 0, NULL, { 0, 0, 0, 0, 0, 0 } }
+};
+/* clang-format on */
+
+/**
+ *
+ */
+int mod_register(char *path, int *dlflags, void *p1, void *p2)
+{
+	sr_kemi_modules_add(sr_kemi_keepalive_exports);
+	return 0;
 }

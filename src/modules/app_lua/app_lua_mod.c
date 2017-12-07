@@ -207,15 +207,16 @@ static void mod_destroy(void)
 	lua_sr_destroy();
 }
 
-static char _lua_buf_stack[4][512];
+#define LUA_BUF_STACK_SIZE 1024
+static char _lua_buf_stack[4][LUA_BUF_STACK_SIZE];
 
 /**
  *
  */
 static int ki_app_lua_dostring(sip_msg_t *msg, str *script)
 {
-	if(script==NULL || script->s==NULL || script->len>=511) {
-		LM_ERR("script too short or too long %d\n", script->len);
+	if(script==NULL || script->s==NULL || script->len>=LUA_BUF_STACK_SIZE-1) {
+		LM_ERR("script too short or too long %d\n", (script)?script->len:0);
 		return -1;
 	}
 	if(!lua_sr_initialized()) {
@@ -247,8 +248,8 @@ static int w_app_lua_dostring(struct sip_msg *msg, char *script, char *extra)
  */
 static int ki_app_lua_dofile(sip_msg_t *msg, str *script)
 {
-	if(script==NULL || script->s==NULL || script->len>=511) {
-		LM_ERR("script too short or too long %d\n", script->len);
+	if(script==NULL || script->s==NULL || script->len>=LUA_BUF_STACK_SIZE-1) {
+		LM_ERR("script too short or too long %d\n", (script)?script->len:0);
 		return -1;
 	}
 	if(!lua_sr_initialized()) {
@@ -278,8 +279,8 @@ static int w_app_lua_dofile(struct sip_msg *msg, char *script, char *extra)
  */
 static int ki_app_lua_runstring(sip_msg_t *msg, str *script)
 {
-	if(script==NULL || script->s==NULL || script->len>=511) {
-		LM_ERR("script too short or too long %d\n", script->len);
+	if(script==NULL || script->s==NULL || script->len>=LUA_BUF_STACK_SIZE-1) {
+		LM_ERR("script too short or too long %d\n", (script)?script->len:0);
 		return -1;
 	}
 	if(!lua_sr_initialized())
@@ -328,7 +329,7 @@ static int w_app_lua_run(struct sip_msg *msg, char *func, char *p1, char *p2,
 		LM_ERR("cannot get the function\n");
 		return -1;
 	}
-	if(s.len>=511)
+	if(s.len>=LUA_BUF_STACK_SIZE-1)
 	{
 		LM_ERR("function too long %d\n", s.len);
 		return -1;
@@ -343,7 +344,7 @@ static int w_app_lua_run(struct sip_msg *msg, char *func, char *p1, char *p2,
 			LM_ERR("cannot get p1\n");
 			return -1;
 		}
-		if(s.len>=511)
+		if(s.len>=LUA_BUF_STACK_SIZE-1)
 		{
 			LM_ERR("p1 too long %d\n", s.len);
 			return -1;
@@ -358,7 +359,7 @@ static int w_app_lua_run(struct sip_msg *msg, char *func, char *p1, char *p2,
 				LM_ERR("cannot get p2\n");
 				return -1;
 			}
-			if(s.len>=511)
+			if(s.len>=LUA_BUF_STACK_SIZE-1)
 			{
 				LM_ERR("p2 too long %d\n", s.len);
 				return -1;
@@ -373,7 +374,7 @@ static int w_app_lua_run(struct sip_msg *msg, char *func, char *p1, char *p2,
 					LM_ERR("cannot get p3\n");
 					return -1;
 				}
-				if(s.len>=511)
+				if(s.len>=LUA_BUF_STACK_SIZE-1)
 				{
 					LM_ERR("p3 too long %d\n", s.len);
 					return -1;
@@ -605,6 +606,54 @@ static void app_lua_rpc_list(rpc_t* rpc, void* ctx)
 	return;
 }
 
+/**
+ * only prototypes of special kemi exports in order to list via rpc
+ */
+/* clang-format off */
+static sr_kemi_t sr_kemi_app_lua_rpc_exports[] = {
+	{ str_init("pv"), str_init("get"),
+		SR_KEMIP_STR, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("pv"), str_init("seti"),
+		SR_KEMIP_NONE, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_INT, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("pv"), str_init("sets"),
+		SR_KEMIP_NONE, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("pv"), str_init("unset"),
+		SR_KEMIP_NONE, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("pv"), str_init("is_null"),
+		SR_KEMIP_BOOL, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("x"), str_init("modf"),
+		SR_KEMIP_INT, NULL,
+		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("x"), str_init("exit"),
+		SR_KEMIP_NONE, NULL,
+		{ SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("x"), str_init("drop"),
+		SR_KEMIP_NONE, NULL,
+		{ SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+
+	{ {0, 0}, {0, 0}, 0, NULL, { 0, 0, 0, 0, 0, 0 } }
+};
 
 static const char* app_lua_rpc_api_list_doc[2] = {
 	"list kemi exports to lua",
@@ -624,10 +673,15 @@ static void app_lua_rpc_api_list(rpc_t* rpc, void* ctx)
 		rpc->fault(ctx, 500, "Internal error root reply");
 		return;
 	}
+
+	/* count the number of exported functions */
 	n = 0;
 	for(i=0; i<SR_KEMI_LUA_EXPORT_SIZE; i++) {
 		ket = sr_kemi_lua_export_get(i);
 		if(ket==NULL) continue;
+		n++;
+	}
+	for(i=0; sr_kemi_app_lua_rpc_exports[i].fname.s!=NULL; i++) {
 		n++;
 	}
 
@@ -641,6 +695,22 @@ static void app_lua_rpc_api_list(rpc_t* rpc, void* ctx)
 	for(i=0; i<SR_KEMI_LUA_EXPORT_SIZE; i++) {
 		ket = sr_kemi_lua_export_get(i);
 		if(ket==NULL) continue;
+		if(rpc->struct_add(ih, "{", "func", &sh)<0) {
+			rpc->fault(ctx, 500, "Internal error internal structure");
+			return;
+		}
+		if(rpc->struct_add(sh, "SSSS",
+				"ret", sr_kemi_param_map_get_name(ket->rtype),
+				"module", &ket->mname,
+				"name", &ket->fname,
+				"params", sr_kemi_param_map_get_params(ket->ptypes))<0) {
+			LM_ERR("failed to add the structure with attributes (%d)\n", i);
+			rpc->fault(ctx, 500, "Internal error creating dest struct");
+			return;
+		}
+	}
+	for(i=0; sr_kemi_app_lua_rpc_exports[i].fname.s!=NULL; i++) {
+		ket = &sr_kemi_app_lua_rpc_exports[i];
 		if(rpc->struct_add(ih, "{", "func", &sh)<0) {
 			rpc->fault(ctx, 500, "Internal error internal structure");
 			return;
