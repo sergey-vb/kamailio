@@ -359,6 +359,7 @@ typedef struct sip_msg {
 								to avoid unnecessary calculations */
 	unsigned int msg_flags; /*!< internal flags used by core */
 	flag_t flags; /*!< config flags */
+	flag_t xflags[KSR_XFLAGS_SIZE]; /*!< config extended flags */
 	str set_global_address;
 	str set_global_port;
 	struct socket_info* force_send_socket; /*!< force sending on this socket */
@@ -497,6 +498,11 @@ void msg_ldata_reset(sip_msg_t*);
  * get source ip, port and protocol in SIP URI format
  */
 int get_src_uri(sip_msg_t *m, int tmode, str *uri);
+
+/**
+ * get source proto:ip:port (socket address format)
+ */
+int get_src_address_socket(sip_msg_t *m, str *ssock);
 
 /**
  * get received-on-socket ip, port and protocol in SIP URI format

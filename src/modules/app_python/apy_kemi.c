@@ -39,9 +39,10 @@
 #include "apy_kemi_export.h"
 #include "apy_kemi.h"
 
-static int *_sr_python_reload_version = NULL;
-static int _sr_python_local_version = 0;
+int *_sr_python_reload_version = NULL;
+int _sr_python_local_version = 0;
 extern str _sr_python_load_file;
+extern int _apy_process_rank;
 
 /**
  *
@@ -60,7 +61,9 @@ int sr_kemi_config_engine_python(sip_msg_t *msg, int rtype, str *rname,
 			ret = apy_exec(msg, "ksr_request_route", NULL, 1);
 		}
 	} else if(rtype==CORE_ONREPLY_ROUTE) {
-		ret = apy_exec(msg, "ksr_reply_route", NULL, 0);
+		if(kemi_reply_route_callback.len>0) {
+			ret = apy_exec(msg, kemi_reply_route_callback.s, NULL, 0);
+		}
 	} else if(rtype==BRANCH_ROUTE) {
 		if(rname!=NULL && rname->s!=NULL) {
 			ret = apy_exec(msg, rname->s, NULL, 0);
@@ -78,7 +81,10 @@ int sr_kemi_config_engine_python(sip_msg_t *msg, int rtype, str *rname,
 			ret = apy_exec(msg, rname->s, NULL, 0);
 		}
 	} else if(rtype==ONSEND_ROUTE) {
-		ret = apy_exec(msg, "ksr_onsend_route", NULL, 0);
+		if(kemi_onsend_route_callback.len>0) {
+			ret = apy_exec(msg, kemi_onsend_route_callback.s, NULL, 0);
+		}
+		return 1;
 	} else if(rtype==EVENT_ROUTE) {
 		if(rname!=NULL && rname->s!=NULL) {
 			ret = apy_exec(msg, rname->s,
@@ -264,6 +270,16 @@ PyObject *sr_apy_kemi_exec_func(PyObject *self, PyObject *args, int idx)
 			}
 			LM_DBG("params[%d] for: %.*s are int-int-int: [%d] [%d] [%d]\n",
 					i, fname.len, fname.s, vps[0].n, vps[1].n, vps[2].n);
+               } else if(ket->ptypes[0]==SR_KEMIP_INT && ket->ptypes[1]==SR_KEMIP_INT
+                               && ket->ptypes[2]==SR_KEMIP_STR) {
+                       if(!PyArg_ParseTuple(args, "iis:kemi-param-nns", &vps[0].n,
+                                            &vps[1].n, &vps[2].s.s)) {
+                               LM_ERR("unable to retrieve int-int-str params %d\n", i);
+                               return sr_kemi_apy_return_false();
+                       }
+                       vps[2].s.len = strlen(vps[2].s.s);
+                       LM_DBG("params[%d] for: %.*s are int-int-str: [%d] [%d] [%.*s]\n", i,
+                               fname.len, fname.s, vps[0].n, vps[1].n, vps[2].s.len, vps[2].s.s);
 		} else if(ket->ptypes[0]==SR_KEMIP_INT && ket->ptypes[1]==SR_KEMIP_STR
 				&& ket->ptypes[2]==SR_KEMIP_INT) {
 			if(!PyArg_ParseTuple(args, "isi:kemi-param-nsn", &vps[0].n,
@@ -1119,8 +1135,6 @@ static const char* app_python_rpc_reload_doc[2] = {
 
 static void app_python_rpc_reload(rpc_t* rpc, void* ctx)
 {
-#if 0
-	int v;
 	void *vh;
 
 	if(_sr_python_load_file.s == NULL && _sr_python_load_file.len<=0) {
@@ -1134,22 +1148,19 @@ static void app_python_rpc_reload(rpc_t* rpc, void* ctx)
 		return;
 	}
 
-	v = *_sr_python_reload_version;
-	LM_INFO("marking for reload js script file: %.*s (%d => %d)\n",
-				_sr_python_load_file.len, _sr_python_load_file.s,
-				_sr_python_local_version, v);
 	*_sr_python_reload_version += 1;
+	LM_INFO("marking for reload Python script file: %.*s (%d)\n",
+				_sr_python_load_file.len, _sr_python_load_file.s,
+				*_sr_python_reload_version);
 
 	if (rpc->add(ctx, "{", &vh) < 0) {
 		rpc->fault(ctx, 500, "Server error");
 		return;
 	}
 	rpc->struct_add(vh, "dd",
-			"old", v,
+			"old", *_sr_python_reload_version-1,
 			"new", *_sr_python_reload_version);
-#endif
 
-	rpc->fault(ctx, 500, "Not implemented");
 	return;
 }
 
