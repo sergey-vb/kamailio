@@ -26,10 +26,8 @@
  * \ingroup prefix_route
  */
 
-/*! \defgroup prefix_route Prefix routing module
- * \ingroup modules
+/*! \defgroup prefix_route
  * The prefix_route module does routing based on a set of prefixes from the database.
- * @{
  */
 
 
@@ -387,5 +385,3 @@ int mod_register(char *path, int *dlflags, void *p1, void *p2)
 	sr_kemi_modules_add(sr_kemi_prefix_route_exports);
 	return 0;
 }
-
-/** @} */

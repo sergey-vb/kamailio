@@ -21,7 +21,7 @@
  */
 
 /**
- * \ingroup dtrie
+ * \file
  * \brief Trie datastructure with utility functions
  *
  * Provides a generic trie datastructure and utility functions to
@@ -34,7 +34,6 @@
  * available for matching. The trie is setup in shared memory.
  * - Module: \ref carrierroute
  * - Module: \ref userblacklist
- * @{
  */
 
 
@@ -276,5 +275,3 @@ void **dtrie_contains(struct dtrie_node_t *root, const char *number,
 	if (nmatch == numberlen) return ret;
 	return NULL;
 }
-
-/** @} */

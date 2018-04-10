@@ -670,15 +670,9 @@ void add_peer_application(peer *p, int id, int vendor, app_type type)
 				p->applications[i].vendor == vendor &&
 				p->applications[i].type == type) return;
 
-  if (p->applications_cnt > p->applications_max) {
-		LM_ERR("Too many applications for this peer (max %i), not adding Application %i:%i.\n", p->applications_max, id, vendor);
-		return;
-	}
-
 	p->applications[p->applications_cnt].id = id;
 	p->applications[p->applications_cnt].vendor = vendor;
 	p->applications[p->applications_cnt].type = type;
-	LM_DBG("Application %i of maximum %i\n", p->applications_cnt, p->applications_max);
 	p->applications_cnt++;
 }
 
@@ -730,7 +724,6 @@ void save_peer_applications(peer *p,AAAMessage *msg)
 		}
 	p->applications_cnt = 0;
 	p->applications = shm_malloc(sizeof(app_config)*total_cnt);
-	p->applications_max = total_cnt;
 	if (!p->applications){
 		LM_ERR("save_peer_applications(): Error allocating %ld bytes! No applications saved...\n",
 				(long int)(sizeof(app_config)*total_cnt));
@@ -1312,3 +1305,5 @@ void Rcv_Process(peer *p, AAAMessage *msg)
 	//	AAAPrintMessage(msg);
 
 }
+
+

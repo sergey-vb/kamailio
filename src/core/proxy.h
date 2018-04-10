@@ -33,7 +33,7 @@
 #include "str.h"
 #include "config.h"
 
-typedef struct proxy_l{
+struct proxy_l{
 	struct proxy_l* next;
 	str name; /* original name */
 	struct hostent host; /* addresses */
@@ -49,7 +49,7 @@ typedef struct proxy_l{
 	int tx;
 	int tx_bytes;
 	int errors;
-} proxy_l_t;
+};
 
 extern struct proxy_l* proxies;
 
@@ -91,3 +91,4 @@ inline static void proxy_mark(struct proxy_l* p, int err)
 
 
 #endif
+

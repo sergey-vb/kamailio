@@ -594,7 +594,7 @@ reload:
 		exit(-1);
 	}
 	mod_if_ver = (unsigned *)dlsym(handle, "module_interface_ver");
-	if (mod_if_ver==NULL || (error =(char*)dlerror())!=0 ){
+	if ( (error =(char*)dlerror())!=0 ){
 		LM_ERR("no module interface version in module <%s>\n", path );
 		goto error1;
 	}
@@ -619,9 +619,6 @@ reload:
 	}
 	exp = (union module_exports_u*)dlsym(handle, "exports");
 	if(exp==NULL) {
-		error =(char*)dlerror();
-		LM_DBG("attempt to lookup exports structure failed - dlerror: %s\n",
-				(error)?error:"none");
 		/* 'exports' structure not found, look up for '_modulename_exports' */
 		mdir = strrchr(mod_path, '/');
 		if (!mdir) {
@@ -633,11 +630,10 @@ reload:
 		if(expref.len>3 && strcmp(expref.s+expref.len-3, ".so")==0)
 			expref.len -= 3;
 		snprintf(exbuf, 62, "_%.*s_exports", expref.len, expref.s);
-		LM_DBG("looking up exports with name: %s\n", exbuf);
 		exp = (union module_exports_u*)dlsym(handle, exbuf);
-		if(exp==NULL || (error =(char*)dlerror())!=0 ){
-			LM_ERR("failure for exports symbol: %s - dlerror: %s\n",
-					exbuf, (error)?error:"none");
+		LM_DBG("looking up exports with name: %s\n", exbuf);
+		if ( (error =(char*)dlerror())!=0 ){
+			LM_ERR("%s\n", error);
 			goto error1;
 		}
 	}
@@ -938,12 +934,10 @@ static int init_mod_child( struct sr_module* m, int rank )
 		 */
 		if (init_mod_child(m->next, rank)!=0) return -1;
 		if (m->exports.init_child_f) {
-			LM_DBG("idx %d rank %d: %s [%s]\n", process_no, rank,
-					m->exports.name, my_desc());
+			LM_DBG("rank %d: %s\n", rank, m->exports.name);
 			if (m->exports.init_child_f(rank)<0) {
-				LM_ERR("error while initializing module %s (%s)"
-						" (idx: %d rank: %d desc: [%s])\n",
-						m->exports.name, m->path, process_no, rank, my_desc());
+				LM_ERR("Error while initializing module %s (%s)\n",
+							m->exports.name, m->path);
 				return -1;
 			} else {
 				/* module correctly initialized */

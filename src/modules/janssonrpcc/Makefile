@@ -1,5 +1,5 @@
 #
-# janssonrpcc module makefile
+# janssonrpc-c module makefile
 #
 #
 # WARNING: do not run this directly, it should be run by the master Makefile
@@ -20,7 +20,7 @@ else
 	LIBS+= $(shell pkg-config --libs libevent)
 endif
 
-DEFS+=-DKAMAILIO_MOD_INTERFACE
+DEFS+=-DOPENSER_MOD_INTERFACE
 
 SERLIBPATH=../../lib
 include ../../Makefile.modules

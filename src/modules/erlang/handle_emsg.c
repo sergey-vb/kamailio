@@ -437,11 +437,7 @@ int erlang_whereis(cnode_handler_t *phandler,erlang_ref_ex_t *ref, erlang_pid *p
 		return 0;
 	}
 
-	if(ei_decode_atom(request->buff,&request->index,route+sizeof("erlang:")-1)) {
-		LM_ERR("error: badarg\n");
-		ei_x_encode_atom(response,"badarg");
-		return 0;
-	}
+	ei_decode_atom(request->buff,&request->index,route+sizeof("erlang:")-1);
 
 	rt = route_get(&event_rt, route);
 	if (rt < 0 || event_rt.rlist[rt] == NULL) {
@@ -644,8 +640,6 @@ int handle_rex_msg(cnode_handler_t *phandler, erlang_msg * msg)
 	ei_x_buff *request = &phandler->request;
 	ei_x_buff *response = &phandler->response;
 
-	memset((void*)&ref,0,sizeof(erlang_ref_ex_t));
-
 	/* start from first arg */
 	request->index = 0;
 	ei_decode_version(request->buff, &request->index, &version);
@@ -824,9 +818,7 @@ int handle_erlang_msg(cnode_handler_t *phandler, erlang_msg * msg)
 				ret = handle_req_ref_tuple(phandler, msg);
 				break;
 			case ERL_PID_EXT:
-				if(ei_decode_pid(request->buff,&tmpindex,&from)) {
-					LM_ERR("failed to decode pid\n");
-				}
+				ei_decode_pid(request->buff,&tmpindex,&from);
 				ret = handle_send(phandler, msg);
 				break;
 			default:

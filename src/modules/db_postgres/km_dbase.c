@@ -103,7 +103,7 @@ static void db_postgres_free_query(const db1_con_t *_con);
 
 
 /*!
- * \brief Initialize database for future queries, with pooling
+ * \brief Initialize database for future queries
  * \param _url URL of the database that should be opened
  * \return database connection on success, NULL on error
  * \note this function must be called prior to any database functions
@@ -114,9 +114,8 @@ db1_con_t *db_postgres_init(const str *_url)
 }
 
 /*!
- * \brief Initialize database for future queries, specify pooling
+ * \brief Initialize database for future queries - no pooling
  * \param _url URL of the database that should be opened
- * \param pooling whether or not to use a pooled connection
  * \return database connection on success, NULL on error
  * \note this function must be called prior to any database functions
  */
@@ -650,7 +649,7 @@ static pg_constraint_t *pg_constraint = NULL;
 
 /*!
  * \brief add/save a detected constraint to the list in memory
- * \param c database constraint structure
+ * \param pg_constraint_t constraint
  */
 static void db_postgres_constraint_add(pg_constraint_t *c)
 {
@@ -931,7 +930,6 @@ int db_postgres_affected_rows(const db1_con_t *_h)
 /**
  * Starts a single transaction that will consist of one or more queries (SQL BEGIN)
  * \param _h database handle
- * \param _l database locking , supports no locking, write locking or full locking
  * \return 0 on success, negative on failure
  */
 int db_postgres_start_transaction(db1_con_t *_h, db_locking_t _l)

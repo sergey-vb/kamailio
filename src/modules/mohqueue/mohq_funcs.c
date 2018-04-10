@@ -2238,10 +2238,7 @@ strcpy (&pfile [npos], pcall->pmohq->mohq_mohfile);
 npos += strlen (&pfile [npos]);
 str pMOH [1] = {{pfile, npos}};
 pv_elem_t *pmodel;
-if(pv_parse_format (pMOH, &pmodel)<0) {
-  LM_ERR("failed to parse pv format string\n");
-  return 0;
-}
+pv_parse_format (pMOH, &pmodel);
 cmd_function fn_stream = bserver ? pmod_data->fn_rtp_stream_s
   : pmod_data->fn_rtp_stream_c;
 mohq_debug (pcall->pmohq, "%sStarting RTP link for call (%s)",

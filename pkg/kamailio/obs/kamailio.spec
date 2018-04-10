@@ -1,6 +1,6 @@
 %define name    kamailio
-%define ver 5.2.0
-%define rel dev1.0%{dist}
+%define ver 5.0.3
+%define rel dev0.0%{dist}
 
 %if 0%{?fedora} == 24
 %define dist_name fedora
@@ -179,7 +179,6 @@ Source:     http://kamailio.org/pub/kamailio/%{ver}/src/%{name}-%{ver}_src.tar.g
 URL:        http://kamailio.org/
 Vendor:     kamailio.org
 BuildRoot:  %{_tmppath}/%{name}-%{ver}-buildroot
-Conflicts:  kamailio-acc_json < %ver
 Conflicts:  kamailio-auth-ephemeral < %ver, kamailio-bdb < %ver
 Conflicts:  kamailio-carrierroute < %ver, kamailio-cpl < %ver
 Conflicts:  kamailio-dialplan < %ver, kamailio-dnssec < %ver
@@ -217,23 +216,6 @@ such as MySQL, Postgres, Oracle, Radius, LDAP, Redis, Cassandra; XMLRPC control
 interface, SNMP monitoring. It can be used to build large VoIP servicing
 platforms or to scale up SIP-to-PSTN gateways, PBX systems or media servers
 like Asterisk™, FreeSWITCH™ or SEMS.
-
-
-%if %{with jansson}
-%package    acc_json
-Summary:    Account transaction information in a JSON dictionary
-Group:      System Environment/Daemons
-%if 0%{?suse_version}
-Requires:   libjansson
-BuildRequires:  libjansson-devel
-%else
-Requires:   jansson
-BuildRequires:  jansson-devel
-%endif
-
-%description    acc_json
-Account transaction information in a JSON dictionary
-%endif
 
 
 %package    auth-ephemeral
@@ -275,6 +257,13 @@ Berkeley database connectivity for Kamailio.
 Summary:    The carrierroute module for Kamailio
 Group:      System Environment/Daemons
 Requires:   kamailio = %ver
+%if 0%{?suse_version}
+Requires:   libconfuse0
+BuildRequires:  libconfuse-devel
+%else
+Requires:   libconfuse
+BuildRequires:  libconfuse-devel
+%endif
 
 %description    carrierroute
 The carrierroute module for Kamailio.
@@ -1129,7 +1118,7 @@ rm -rf %{buildroot}
 %if "%{?_unitdir}" == ""
 /sbin/chkconfig --add kamailio
 %else
-%tmpfiles_create kamailio.conf
+%tmpfiles_create kamailio
 /usr/bin/systemctl -q enable kamailio.service
 %endif
 
@@ -1199,6 +1188,7 @@ fi
 %doc %{_docdir}/kamailio/modules/README.group
 %doc %{_docdir}/kamailio/modules/README.htable
 %doc %{_docdir}/kamailio/modules/README.imc
+%doc %{_docdir}/kamailio/modules/README.ims_ocs
 %doc %{_docdir}/kamailio/modules/README.ipops
 %doc %{_docdir}/kamailio/modules/README.kex
 %doc %{_docdir}/kamailio/modules/README.malloc_test
@@ -1346,6 +1336,7 @@ fi
 %{_libdir}/kamailio/modules/group.so
 %{_libdir}/kamailio/modules/htable.so
 %{_libdir}/kamailio/modules/imc.so
+%{_libdir}/kamailio/modules/ims_ocs.so
 %{_libdir}/kamailio/modules/ipops.so
 %{_libdir}/kamailio/modules/kex.so
 %{_libdir}/kamailio/modules/malloc_test.so
@@ -1451,14 +1442,6 @@ fi
 %dir %{_datadir}/kamailio/dbtext
 %dir %{_datadir}/kamailio/dbtext/kamailio
 %{_datadir}/kamailio/dbtext/kamailio/*
-
-
-%if %{with jansson}
-%files      acc_json
-%defattr(-,root,root)
-%doc %{_docdir}/kamailio/modules/README.acc_json
-%{_libdir}/kamailio/modules/acc_json.so
-%endif
 
 
 %files      auth-ephemeral
@@ -1570,7 +1553,6 @@ fi
 %doc %{_docdir}/kamailio/modules/README.ims_diameter_server
 %doc %{_docdir}/kamailio/modules/README.ims_icscf
 %doc %{_docdir}/kamailio/modules/README.ims_isc
-%doc %{_docdir}/kamailio/modules/README.ims_ocs
 %doc %{_docdir}/kamailio/modules/README.ims_qos
 %doc %{_docdir}/kamailio/modules/README.ims_registrar_pcscf
 %doc %{_docdir}/kamailio/modules/README.ims_registrar_scscf
@@ -1588,7 +1570,6 @@ fi
 %{_libdir}/kamailio/modules/ims_diameter_server.so
 %{_libdir}/kamailio/modules/ims_icscf.so
 %{_libdir}/kamailio/modules/ims_isc.so
-%{_libdir}/kamailio/modules/ims_ocs.so
 %{_libdir}/kamailio/modules/ims_qos.so
 %{_libdir}/kamailio/modules/ims_registrar_pcscf.so
 %{_libdir}/kamailio/modules/ims_registrar_scscf.so
@@ -1732,9 +1713,6 @@ fi
 %doc %{_docdir}/kamailio/modules/README.pua
 %doc %{_docdir}/kamailio/modules/README.pua_bla
 %doc %{_docdir}/kamailio/modules/README.pua_dialoginfo
-%if %{with json}
-%doc %{_docdir}/kamailio/modules/README.pua_json
-%endif
 %doc %{_docdir}/kamailio/modules/README.pua_reginfo
 %doc %{_docdir}/kamailio/modules/README.pua_usrloc
 %doc %{_docdir}/kamailio/modules/README.pua_xmpp
@@ -1751,9 +1729,6 @@ fi
 %{_libdir}/kamailio/modules/pua.so
 %{_libdir}/kamailio/modules/pua_bla.so
 %{_libdir}/kamailio/modules/pua_dialoginfo.so
-%if %{with json}
-%{_libdir}/kamailio/modules/pua_json.so
-%endif
 %{_libdir}/kamailio/modules/pua_reginfo.so
 %{_libdir}/kamailio/modules/pua_usrloc.so
 %{_libdir}/kamailio/modules/pua_xmpp.so
@@ -1791,14 +1766,10 @@ fi
 %if %{with redis}
 %files      redis
 %defattr(-,root,root)
-%doc %{_docdir}/kamailio/modules/README.db_redis
 %doc %{_docdir}/kamailio/modules/README.ndb_redis
 %doc %{_docdir}/kamailio/modules/README.topos_redis
-%{_libdir}/kamailio/modules/db_redis.so
 %{_libdir}/kamailio/modules/ndb_redis.so
 %{_libdir}/kamailio/modules/topos_redis.so
-%dir %{_datadir}/kamailio/db_redis
-%{_datadir}/kamailio/db_redis/*
 %endif
 
 

@@ -23,7 +23,6 @@
  * \brief Parser :: Body handling
  *
  * \ingroup parser
- * @{
  */
 
 
@@ -50,5 +49,3 @@ char *get_body_part_by_filter(struct sip_msg *msg,
 		     int *len);
 
 #endif /* PARSE_BODY_H */
-
-/** @} */

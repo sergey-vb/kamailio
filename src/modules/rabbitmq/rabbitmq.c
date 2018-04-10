@@ -507,7 +507,7 @@ static int ki_rabbitmq_publish_consume(sip_msg_t *msg, str *exchange,
 
 	dst = pv_cache_get(dpv);
 
-	if(dst==NULL) {
+	if(dpv==NULL) {
 		LM_ERR("failed getting pv: %.*s\n", dpv->len, dpv->s);
 		return -1;
 	}

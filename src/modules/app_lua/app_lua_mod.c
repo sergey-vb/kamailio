@@ -122,10 +122,7 @@ int sr_kemi_config_engine_lua(sip_msg_t *msg, int rtype, str *rname,
 			ret = app_lua_run_ex(msg, "ksr_request_route", NULL, NULL, NULL, 1);
 		}
 	} else if(rtype==CORE_ONREPLY_ROUTE) {
-		if(kemi_reply_route_callback.len>0) {
-			ret = app_lua_run_ex(msg, kemi_reply_route_callback.s, NULL,
-						NULL, NULL, 0);
-		}
+		ret = app_lua_run_ex(msg, "ksr_reply_route", NULL, NULL, NULL, 0);
 	} else if(rtype==BRANCH_ROUTE) {
 		if(rname!=NULL && rname->s!=NULL) {
 			ret = app_lua_run_ex(msg, rname->s, NULL, NULL, NULL, 0);
@@ -143,11 +140,7 @@ int sr_kemi_config_engine_lua(sip_msg_t *msg, int rtype, str *rname,
 			ret = app_lua_run_ex(msg, rname->s, NULL, NULL, NULL, 0);
 		}
 	} else if(rtype==ONSEND_ROUTE) {
-		if(kemi_onsend_route_callback.len>0) {
-			ret = app_lua_run_ex(msg, kemi_onsend_route_callback.s, NULL,
-					NULL, NULL, 0);
-		}
-		return 1;
+		ret = app_lua_run_ex(msg, "ksr_onsend_route", NULL, NULL, NULL, 0);
 	} else if(rtype==EVENT_ROUTE) {
 		if(rname!=NULL && rname->s!=NULL) {
 			ret = app_lua_run_ex(msg, rname->s,

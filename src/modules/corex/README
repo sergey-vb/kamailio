@@ -48,12 +48,6 @@ Muhammad Shahzad Shafi
               4.8. msg_iflag_is_set(flagname)
               4.9. file_read(fpath, var)
               4.10. file_write(fpath, content)
-              4.11. setxflag(flag)
-              4.12. isxflagset(flag)
-              4.13. resetxflag(flag)
-              4.14. set_send_socket(saddr)
-              4.15. set_recv_socket(saddr)
-              4.16. set_source_address(saddr)
 
         5. RPC Commands
 
@@ -85,14 +79,8 @@ Muhammad Shahzad Shafi
    1.11. msg_iflag_is_set usage
    1.12. file_read usage
    1.13. file_write usage
-   1.14. setxflag usage
-   1.15. isxflagset usage
-   1.16. resetxflag usage
-   1.17. set_send_socket usage
-   1.18. set_recv_socket usage
-   1.19. set_source_address usage
-   1.20. event_route[network:msg] use cases
-   1.21. Sample PERL code for do_compress and do_uncompress
+   1.14. event_route[network:msg] use cases
+   1.15. Sample PERL code for do_compress and do_uncompress
 
 Chapter 1. Admin Guide
 
@@ -123,12 +111,6 @@ Chapter 1. Admin Guide
         4.8. msg_iflag_is_set(flagname)
         4.9. file_read(fpath, var)
         4.10. file_write(fpath, content)
-        4.11. setxflag(flag)
-        4.12. isxflagset(flag)
-        4.13. resetxflag(flag)
-        4.14. set_send_socket(saddr)
-        4.15. set_recv_socket(saddr)
-        4.16. set_source_address(saddr)
 
    5. RPC Commands
 
@@ -258,12 +240,6 @@ modparam("corex", "msg_avp", "$avp(msg)")
    4.8. msg_iflag_is_set(flagname)
    4.9. file_read(fpath, var)
    4.10. file_write(fpath, content)
-   4.11. setxflag(flag)
-   4.12. isxflagset(flag)
-   4.13. resetxflag(flag)
-   4.14. set_send_socket(saddr)
-   4.15. set_recv_socket(saddr)
-   4.16. set_source_address(saddr)
 
 4.1.  append_branch([ uri, [ q ] ])
 
@@ -410,102 +386,6 @@ if(file_read("/tmp/data.txt", "$var(data)")) { ... }
 if(file_write("/tmp/data.txt", "Data is: $var(data)")) { ... }
 ...
 
-4.11. setxflag(flag)
-
-   Set the extended message (transaction) flag.
-
-   Meaning of the parameters is as follows:
-     * flag - the index of the flag to be set. Can be integer or
-       pseudo-variable with integer value (range 0-63).
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.14. setxflag usage
-...
-setxflag("1");
-...
-$var(flag) = 11;
-setxflag("$var(flag)");
-...
-
-4.12. isxflagset(flag)
-
-   Return true of the extended message (transaction) flag is set.
-
-   Meaning of the parameters is as follows:
-     * flag - the index of the flag to be tested. Can be integer or
-       pseudo-variable with integer value (range 0-63).
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.15. isxflagset usage
-...
-if(isxflagset("1"))
-{
-    ...
-}
-...
-
-4.13. resetxflag(flag)
-
-   Reset the extended message (transaction) flag.
-
-   Meaning of the parameters is as follows:
-     * flag - the index of the flag to be reset. Can be integer or
-       pseudo-variable with integer value (range 0-63).
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.16. resetxflag usage
-...
-resetxflag("1");
-...
-
-4.14. set_send_socket(saddr)
-
-   Set the socket for sending out.
-
-   Meaning of the parameters is as follows:
-     * saddr - the address of the local socket (listen address). Can be a
-       static string or contain pseudo-variable.
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.17. set_send_socket usage
-...
-set_send_socket("udp:127.0.0.1:5060");
-...
-
-4.15. set_recv_socket(saddr)
-
-   Switch local socket used for receiving the message.
-
-   Meaning of the parameters is as follows:
-     * saddr - the address of the local socket (listen address). Can be a
-       static string or contain pseudo-variable.
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.18. set_recv_socket usage
-...
-set_recv_socket("udp:127.0.0.1:5060");
-...
-
-4.16. set_source_address(saddr)
-
-   Set the source address for the message.
-
-   Meaning of the parameters is as follows:
-     * saddr - the source address in socket format. Can be a static string
-       or contain pseudo-variable.
-
-   This function can be used from ANY_ROUTE.
-
-   Example 1.19. set_source_address usage
-...
-set_source_address("udp:127.0.0.1:5080");
-...
-
 5. RPC Commands
 
    5.1. corex.debug
@@ -582,7 +462,7 @@ set_source_address("udp:127.0.0.1:5080");
    After executing of this event route, if msg_avp was defined and set
    then its value is used for further processing, otherwise, original
    value of $mb is used. If message was received from remote host, then it
-   is parsed and proceeds to appropriate route. Otherwise if message set
+   is parsed and proceeds to appropriate route. Oterhwise if message set
    to send out, then is sent to remote host per configured SIP timers in
    config script.
 
@@ -613,7 +493,7 @@ set_source_address("udp:127.0.0.1:5080");
    proxy may be decrypted and sent to SIP application server at remote
    location unencrypted, where they are processed as normal. One the way
    back, the messages received from SIP application server at edge proxy
-   can be encrypted before being sent to actual destination. The edge
+   can be encrpyted before being sent to actual destination. The edge
    proxy can check whether received message came from end-user or SIP
    application server by using simple regular expressions.
 
@@ -633,14 +513,14 @@ set_source_address("udp:127.0.0.1:5080");
    device UUID along with ITV key, encrypted using RSA or AES256 with
    pre-shared secret, as first packet, which is set as cookie by server in
    e.g. memcache. This cookie is referred by client app in each next
-   packet, so server can retrieve encryption key from cache and use that
-   for decryption. Same can be done for server at client app side, so
-   messages encrypted by server can be decrypted at client app.
+   packet, so server can retrive encyption key from cache and use that for
+   decryption. Same can be done for server at client app side, so messages
+   encrypted by server can be decrypted at client app.
 
    Next is a basic usage example where encoding and decoding is done using
    PERL,
 
-   Example 1.20. event_route[network:msg] use cases
+   Example 1.14. event_route[network:msg] use cases
 ...
 loadmodule "app_perl.so"
 loadmodule "corex.so"
@@ -671,7 +551,7 @@ event_route[network:msg] {
 }
 ...
 
-   Example 1.21. Sample PERL code for do_compress and do_uncompress
+   Example 1.15. Sample PERL code for do_compress and do_uncompress
 ...
 use strict;
 use warnings;

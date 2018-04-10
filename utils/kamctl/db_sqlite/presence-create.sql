@@ -9,15 +9,13 @@ CREATE TABLE presentity (
     body BLOB NOT NULL,
     sender VARCHAR(128) NOT NULL,
     priority INTEGER DEFAULT 0 NOT NULL,
-    ruid VARCHAR(64),
-    CONSTRAINT presentity_presentity_idx UNIQUE (username, domain, event, etag),
-    CONSTRAINT presentity_ruid_idx UNIQUE (ruid)
+    CONSTRAINT presentity_presentity_idx UNIQUE (username, domain, event, etag)
 );
 
 CREATE INDEX presentity_presentity_expires ON presentity (expires);
 CREATE INDEX presentity_account_idx ON presentity (username, domain, event);
 
-INSERT INTO version (table_name, table_version) values ('presentity','5');
+INSERT INTO version (table_name, table_version) values ('presentity','4');
 
 CREATE TABLE active_watchers (
     id INTEGER PRIMARY KEY NOT NULL,
@@ -37,7 +35,7 @@ CREATE TABLE active_watchers (
     record_route TEXT,
     expires INTEGER NOT NULL,
     status INTEGER DEFAULT 2 NOT NULL,
-    reason VARCHAR(64),
+    reason VARCHAR(64) NOT NULL,
     version INTEGER DEFAULT 0 NOT NULL,
     socket_info VARCHAR(64) NOT NULL,
     local_contact VARCHAR(128) NOT NULL,
@@ -46,7 +44,7 @@ CREATE TABLE active_watchers (
     updated INTEGER NOT NULL,
     updated_winfo INTEGER NOT NULL,
     flags INTEGER DEFAULT 0 NOT NULL,
-    user_agent VARCHAR(255) DEFAULT '',
+    user_agent VARCHAR(255) DEFAULT '' NOT NULL,
     CONSTRAINT active_watchers_active_watchers_idx UNIQUE (callid, to_tag, from_tag)
 );
 

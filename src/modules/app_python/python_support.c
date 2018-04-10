@@ -29,8 +29,6 @@
 #include "app_python_mod.h"
 #include "python_support.h"
 
-static char *make_message(const char *fmt, va_list ap);
-
 void python_handle_exception(const char *fmt, ...)
 {
 	PyObject *pResult;
@@ -42,7 +40,6 @@ void python_handle_exception(const char *fmt, ...)
 	int i;
 	char *srcbuf;
 	int exc_exit = 0;
-	va_list ap;
 
 	// We don't want to generate traceback when no errors occurred
 	if (!PyErr_Occurred())
@@ -50,11 +47,8 @@ void python_handle_exception(const char *fmt, ...)
 
 	if (fmt == NULL)
 		srcbuf = NULL;
-	else {
-		va_start(ap, fmt);
-		srcbuf = make_message(fmt, ap);
-		va_end(ap);
-	}
+	else
+		srcbuf = make_message(fmt);
 
 	PyErr_Fetch(&exception, &v, &tb);
 	PyErr_Clear();
@@ -190,11 +184,12 @@ PyObject *InitTracebackModule()
 }
 
 
-static char *make_message(const char *fmt, va_list ap)
+char *make_message(const char *fmt, ...)
 {
 	int n;
 	size_t size;
 	char *p, *np;
+	va_list ap;
 
 	size = 100;     /* Guess we need no more than 100 bytes. */
 	p = (char *)pkg_realloc(NULL, size * sizeof(char));
@@ -208,7 +203,9 @@ static char *make_message(const char *fmt, va_list ap)
 
 	while (1)
 	{
+		va_start(ap, fmt);
 		n = vsnprintf(p, size, fmt, ap);
+		va_end(ap);
 
 		if (n > -1 && n < size)
 			return p;

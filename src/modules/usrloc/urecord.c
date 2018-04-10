@@ -216,7 +216,7 @@ void mem_delete_ucontact(urecord_t* _r, ucontact_t* _c)
 	free_ucontact(_c);
 }
 
-int is_valid_tcpconn(ucontact_t *c)
+static inline int is_valid_tcpconn(ucontact_t *c)
 {
 	if (c->tcpconn_id == -1)
 		return 0; /* tcpconn_id is not present */
@@ -224,7 +224,7 @@ int is_valid_tcpconn(ucontact_t *c)
 		return 1; /* valid tcpconn_id */
 }
 
-int is_tcp_alive(ucontact_t *c)
+static inline int is_tcp_alive(ucontact_t *c)
 {
 	struct tcp_connection *con = NULL;
 	int rc = 0;
@@ -286,10 +286,8 @@ static inline void nodb_timer(urecord_t* _r)
 
 		if (!VALID_CONTACT(ptr, act_time)) {
 			/* run callbacks for EXPIRE event */
-			if (!(ptr->flags&FL_EXPCLB) && exists_ulcb_type(UL_CONTACT_EXPIRE)) {
+			if (exists_ulcb_type(UL_CONTACT_EXPIRE))
 				run_ul_callbacks( UL_CONTACT_EXPIRE, ptr);
-				ptr->flags |= FL_EXPCLB;
-			}
 
 			LM_DBG("Binding '%.*s','%.*s' has expired\n",
 				ptr->aor->len, ZSW(ptr->aor->s),
@@ -735,7 +733,7 @@ static inline struct ucontact* contact_path_match( ucontact_t* ptr, str* _c, str
 /*!
  * \brief Match a contact record to a Call-ID only
  * \param ptr contact record
- * \param _callid callid string
+ * \param _c contact string
  * \return ptr on successfull match, 0 when they not match
  */
 static inline struct ucontact* contact_match_callidonly( ucontact_t* ptr, str* _callid)
