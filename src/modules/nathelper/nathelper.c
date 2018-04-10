@@ -148,7 +148,6 @@ static struct {
 	{"172.16.0.0",  0, 0xffffffffu << 20},
 	{"192.168.0.0", 0, 0xffffffffu << 16},
 	{"100.64.0.0",  0, 0xffffffffu << 22}, /* rfc6598 - cg-nat */
-	{"192.0.0.0",   0, 0xffffffffu <<  3}, /* rfc7335 - IPv4 Service Continuity Prefix */
 	{NULL, 0, 0}
 };
 /* clang-format on */
@@ -418,8 +417,6 @@ static int mod_init(void)
 	struct in_addr addr;
 	pv_spec_t avp_spec;
 	str s;
-	int port, proto;
-	str host;
 
 	if(nathelper_rpc_init() < 0) {
 		LM_ERR("failed to register RPC commands\n");
@@ -445,12 +442,7 @@ static int mod_init(void)
 	}
 
 	if(force_socket_str.s && force_socket_str.len > 0) {
-		if(parse_phostport(force_socket_str.s, &host.s, &host.len, &port, &proto) == 0) {
-			force_socket = grep_sock_info(&host, port, proto);
-			if(force_socket == 0) {
-				LM_ERR("non-local force_socket <%s>\n", force_socket_str.s);
-			}
-		}
+		force_socket = grep_sock_info(&force_socket_str, 0, 0);
 	}
 
 	/* create raw socket? */
@@ -2105,19 +2097,12 @@ static int create_rcv_uri(str *uri, struct sip_msg *m)
  * Add received parameter to Contacts for further
  * forwarding of the REGISTER requuest
  */
-static int ki_add_rcv_param(sip_msg_t *msg, int upos)
+static int ki_add_rcv_param(sip_msg_t *msg, int hdr_param)
 {
 	contact_t *c;
 	struct lump *anchor;
 	char *param;
 	str uri;
-
-	if(upos) {
-		if(msg->rcv.proto != PROTO_UDP) {
-			LM_ERR("adding received parameter to Contact URI works only for UDP\n");
-			return -1;
-		}
-	}
 
 	if(create_rcv_uri(&uri, msg) < 0) {
 		return -1;
@@ -2134,20 +2119,16 @@ static int ki_add_rcv_param(sip_msg_t *msg, int upos)
 			return -1;
 		}
 		memcpy(param, RECEIVED, RECEIVED_LEN);
-		if(upos) {
-			memcpy(param + RECEIVED_LEN, uri.s, uri.len);
-		} else {
-			param[RECEIVED_LEN] = '\"';
-			memcpy(param + RECEIVED_LEN + 1, uri.s, uri.len);
-			param[RECEIVED_LEN + 1 + uri.len] = '\"';
-		}
+		param[RECEIVED_LEN] = '\"';
+		memcpy(param + RECEIVED_LEN + 1, uri.s, uri.len);
+		param[RECEIVED_LEN + 1 + uri.len] = '\"';
 
-		if(upos) {
-			/* add the param as uri param */
-			anchor = anchor_lump(msg, c->uri.s + c->uri.len - msg->buf, 0, 0);
-		} else {
+		if(hdr_param) {
 			/* add the param as header param */
 			anchor = anchor_lump(msg, c->name.s + c->len - msg->buf, 0, 0);
+		} else {
+			/* add the param as uri param */
+			anchor = anchor_lump(msg, c->uri.s + c->uri.len - msg->buf, 0, 0);
 		}
 		if(anchor == NULL) {
 			LM_ERR("anchor_lump failed\n");
@@ -2155,8 +2136,9 @@ static int ki_add_rcv_param(sip_msg_t *msg, int upos)
 			return -1;
 		}
 
-		if(insert_new_lump_after(anchor, param,
-					RECEIVED_LEN + 1 + uri.len + 1 - ((upos)?2:0), 0) == 0) {
+		if(insert_new_lump_after(
+				   anchor, param, RECEIVED_LEN + 1 + uri.len + 1, 0)
+				== 0) {
 			LM_ERR("insert_new_lump_after failed\n");
 			pkg_free(param);
 			return -1;
@@ -2180,7 +2162,7 @@ static int add_rcv_param_f(struct sip_msg *msg, char *str1, char *str2)
 
 	if(str1) {
 		if(fixup_get_ivalue(msg, (gparam_t*)str1, &hdr_param)<0) {
-			LM_ERR("failed to get flags parameter\n");
+			LM_ERR("failed to get falgs parameter\n");
 			return -1;
 		}
 	}

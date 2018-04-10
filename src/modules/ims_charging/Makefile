@@ -8,7 +8,7 @@ auto_gen=
 NAME=ims_charging.so
 LIBS=
 
-DEFS+=-DKAMAILIO_MOD_INTERFACE
+DEFS+=-DOPENSER_MOD_INTERFACE
 
 SERLIBPATH=../../lib
 SER_LIBS+=$(SERLIBPATH)/ims/kamailio_ims

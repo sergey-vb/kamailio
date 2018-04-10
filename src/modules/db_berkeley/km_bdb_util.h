@@ -37,3 +37,4 @@
 int km_bdb_is_database(str *);
 
 #endif
+

@@ -92,7 +92,7 @@ AV *keys2perlarray(db_key_t* keys, int n) {
 	return array;
 }
 
-SV *valdata(db_val_t* val) {
+inline SV *valdata(db_val_t* val) {
 	SV *data = &PL_sv_undef;
 	const char* stringval;
 

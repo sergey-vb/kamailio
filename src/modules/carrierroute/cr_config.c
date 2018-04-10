@@ -97,9 +97,6 @@ static int init_target_opts(){
 }
 
 static void reset_prefix_opts(){
-	memset(&(target_options[PO_MAX_TARGETS].value),'\0', sizeof(union opt_data));
-	prefix_options[PO_MAX_TARGETS].visited = 0;
-	prefix_options[PO_MAX_TARGETS].no_elems = 0;
 	prefix_options[PO_MAX_TARGETS].value.int_data=-1;
 }
 

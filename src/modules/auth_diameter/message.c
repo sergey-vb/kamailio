@@ -309,7 +309,7 @@ AAAMessage* AAATranslateMessage( unsigned char* source, unsigned int sourceLen,
 	//AAAPrintMessage( msg );
 	return  msg;
 error:
-	LM_ERR(" message conversion dropped!!\n");
+	LM_ERR(" message conversion droped!!\n");
 	AAAFreeMessage(&msg);
 	return 0;
 }

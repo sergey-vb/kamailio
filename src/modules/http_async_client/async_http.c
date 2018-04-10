@@ -45,7 +45,6 @@
 #include "../../core/dprint.h"
 #include "../../core/ut.h"
 #include "../../core/cfg/cfg_struct.h"
-#include "../../core/receive.h"
 #include "../../core/fmsg.h"
 #include "../../core/kemi.h"
 #include "../../modules/tm/tm_load.h"
@@ -264,7 +263,6 @@ void async_http_cb(struct http_m_reply *reply, void *param)
 				LM_ERR("error running event route kemi callback\n");
 			}
 		}
-		ksr_msg_env_reset();
 	}
 
 done:

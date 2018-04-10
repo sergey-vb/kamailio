@@ -328,10 +328,7 @@ int verify_source(struct sip_msg* _msg, char* s1, char* s2)
     }
 
     /* Add P-Request-Hash header body */
-	if(parse_headers(_msg, HDR_EOH_F, 0)<0) {
-		LM_ERR("failed to parse headers\n");
-		return -1;
-	}
+    parse_headers(_msg, HDR_EOH_F, 0);
     for (hf = _msg->headers; hf; hf = hf->next) {
 		if(cmp_hdrname_strzn(&hf->name, "P-Request-Hash",
 			sizeof("P-Request-Hash") - 1) == 0)

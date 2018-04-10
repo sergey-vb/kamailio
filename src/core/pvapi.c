@@ -289,7 +289,6 @@ int pv_cache_drop(void)
 				pkg_free(pvi);
 				return 1;
 			}
-			pvp = pvi;
 			pvi = pvi->next;
 		}
 	}
@@ -311,7 +310,6 @@ int pv_cache_drop(void)
 				pkg_free(pvi);
 				return 1;
 			}
-			pvp = pvi;
 			pvi = pvi->next;
 		}
 	}

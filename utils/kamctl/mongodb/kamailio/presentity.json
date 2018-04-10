@@ -1,6 +1,6 @@
 {
   "name": "presentity",
-  "version": 5,
+  "version": 4,
   "columns": [
     "id": {
       "type": "int",
@@ -51,11 +51,6 @@
       "type": "int",
       "default": 0,
       "null": false
-    },
-    "ruid": {
-      "type": "string",
-      "default": null,
-      "null": true
     }
   ]
 }

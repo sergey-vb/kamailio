@@ -175,7 +175,7 @@ FILES
   ${SCRIPT_DIR}/${DROP_SCRIPT}
     
 REPORTING BUGS
-  Report bugs to <sr-dev@lists.kamailio.org>             
+  Report bugs to <ser-bugs@iptel.org>             
 EOF
 } #usage
 

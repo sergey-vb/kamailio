@@ -186,7 +186,7 @@ dbcassa_table_p dbcassa_load_file(str* dbn, str* tbn)
 #define KEY_MAX_LEN 10
 	FILE *fin=NULL;
 	char buf[4096];
-	int c, ccol, bp;
+	int c, crow, ccol, bp, max_auto;
 	dbcassa_table_p dtp = 0;
 	dbcassa_column_p colp= 0;
 	dbcassa_column_p key[KEY_MAX_LEN];
@@ -209,7 +209,9 @@ dbcassa_table_p dbcassa_load_file(str* dbn, str* tbn)
 		goto done;
 
 	state = DBCASSA_FLINE_ST;
+	crow = ccol = -1;
 	c = fgetc(fin);
+	max_auto = 0;
 	while(c!=EOF) {
 		switch(state) {
 			case DBCASSA_FLINE_ST:

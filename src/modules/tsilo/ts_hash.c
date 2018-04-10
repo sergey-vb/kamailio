@@ -42,7 +42,7 @@ struct ts_table *t_table = 0;
 
 /*!
  * \brief Destroy a urecord and free memory
- * \param urecord destroyed urecord
+ * \param tma destroyed urecord
  */
 void free_ts_urecord(struct ts_urecord *urecord)
 {
@@ -231,7 +231,6 @@ int new_ts_urecord(str* ruri, ts_urecord_t** _r)
 /*!
  * \brief Insert a new record into transactions table
  * \param ruri request uri
- * \param _r pointer to the new record
  * \return 0 on success, -1 on failure
  */
 int insert_ts_urecord(str* ruri, ts_urecord_t** _r)
@@ -267,7 +266,7 @@ int insert_ts_urecord(str* ruri, ts_urecord_t** _r)
 
 /*!
  * \brief remove a urecord from table and free the memory
- * \param _r urecord
+ * \param urecord t
  * \return 0 on success, -1 on failure
  */
 void remove_ts_urecord(ts_urecord_t* _r)
@@ -296,9 +295,9 @@ void remove_ts_urecord(ts_urecord_t* _r)
 
 /*!
  * \brief Insert a new transaction structure into urecord
- * \param t transaction
- * \param msg SIP message
  * \param _r urecord
+ * \param tindex transaction index in tm table
+ * \param tlabel transaction label in tm table
  * \return 0 on success, -1 otherwise
  */
 int insert_ts_transaction(struct cell* t, struct sip_msg* msg, struct ts_urecord* _r)
@@ -398,7 +397,7 @@ ts_transaction_t* clone_ts_transaction(ts_transaction_t* ts)
 
 /*!
  * \brief remove a transaction from the urecord transactions list
- * \param ts_t unlinked transaction
+ * \param tma unlinked transaction
  */
 void remove_ts_transaction(ts_transaction_t* ts_t)
 {
@@ -420,7 +419,7 @@ void remove_ts_transaction(ts_transaction_t* ts_t)
 
 /*!
  * \brief Destroy a transaction and free memory
- * \param ts_t destroyed transaction
+ * \param tma destroyed transaction
  */
 void free_ts_transaction(void *ts_t)
 {

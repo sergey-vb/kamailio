@@ -400,9 +400,6 @@ static pv_export_t mod_pvs[] = {
 	{{"RAut", (sizeof("RAut")-1)}, /* */
 		PVT_OTHER, pv_get_rcvadv_uri_full, 0,
 		0, 0, 0, 0},
-	{{"sas", (sizeof("sas")-1)}, /* */
-		PVT_OTHER, pv_get_srcaddr_socket, 0,
-		0, 0, 0, 0},
 	{{"sf", (sizeof("sf")-1)}, /* */
 		PVT_OTHER, pv_get_sflags, pv_set_sflags,
 		0, 0, 0, 0},

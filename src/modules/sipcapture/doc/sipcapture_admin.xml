@@ -58,7 +58,7 @@
 			<itemizedlist>
 			<listitem>
 			<para>
-				<emphasis>database module</emphasis> - mysql, postgres,
+				<emphasis>database module</emphasis> - mysql, postrgress,
 				dbtext, unixodbc...
 			</para>
 			</listitem>

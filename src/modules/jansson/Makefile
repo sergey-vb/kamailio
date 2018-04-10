@@ -23,7 +23,7 @@ else
 	LIBS+=-L$(SYSBASE)/include/lib -L$(LOCALBASE)/lib -ljansson
 endif
 
-DEFS+=-DKAMAILIO_MOD_INTERFACE
+DEFS+=-DOPENSER_MOD_INTERFACE
 
 SERLIBPATH=../../lib
 include ../../Makefile.modules

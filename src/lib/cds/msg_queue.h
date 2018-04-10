@@ -33,8 +33,9 @@
 extern "C" {
 #endif
 
-/** 
- * \ingroup cds 
+/** \ingroup cds
+ * @{ 
+ *
  * \defgroup cds_msg_queue Message Queue
  *
  * Message queue is a structure useful for sending data between processes.
@@ -181,7 +182,8 @@ void msg_queue_destroy(msg_queue_t *q);
  * It uses cds_free for freeing the memory. */
 void msg_queue_free(msg_queue_t *q);
 
-/** @} */
+/** @} 
+ @} */
 
 #ifdef __cplusplus
 }

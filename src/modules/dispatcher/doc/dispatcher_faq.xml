@@ -21,7 +21,7 @@
 	    </question>
 	    <answer>
 		<para>
-			The algorithms doing hashing over parts of SIP message don't
+			The algoritms doing hashing over parts of SIP message don't
 			guarantee a fair distribution. You should do some measurements
 			to decide what hashing algorithm fits better in your
 			environment.
@@ -77,7 +77,7 @@
 		    regarding development versions or GIT snapshots should be send to &kamailiodevmail;.
 		</para>
 		<para>
-		    Please report security issues to &kamailioprivatemail;.
+		    If you want to keep the mail private, send it to &kamailiohelpmail;.
 		</para>
 	    </answer>
 	</qandaentry>

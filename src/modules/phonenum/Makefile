@@ -9,7 +9,7 @@ CXX=g++
 LD=g++
 LIB_DIR = /opt/local/lib
 
-LIBS= -L${LIB_DIR} cphonenumber.o -lphonenumber -lgeocoding
+LIBS= -L${LIB_DIR} cphonenumber.o -lphonenumber
 
 DEFS+= -I/opt/local/include -DKAMAILIO_MOD_INTERFACE
 
@@ -23,10 +23,3 @@ cphonenumber.o: cphonenumber.cpp cphonenumber.h
 	$(CXX) $(CXXFLAGS) $(CFLAGS) $(C_DEFS) $(DEFS) -c $< -o $@
 
 phonenum.so: cphonenumber.o
-
-modclean:
-	-@rm -f cphonenumber.o
-
-clean clean-modules: modclean
-
-proper realclean distclean maintainer-clean: modclean

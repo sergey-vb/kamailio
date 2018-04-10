@@ -98,7 +98,7 @@ int db_unixodbc_list_insert(list** start, list** link, int n, strn* value)
 
 /*!
  * \brief Destroy a list
- * \param start start of the list element(s)
+ * \param link list element(s)
  */
 void db_unixodbc_list_destroy(list *start)
 {

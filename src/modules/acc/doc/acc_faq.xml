@@ -23,7 +23,7 @@
 		<para>
 			The parameter became obsolete with the restructure of the data
 			logged by ACC module (refer to the Overview chapter). For similar
-			behaviour you can use the extra accounting (see the corresponding
+			behaviour you can use the extra accouting (see the coresponding
 			chapter).
 		</para>
 		</answer>
@@ -35,8 +35,8 @@
 		</question>
 		<answer>
 		<para>
-			The parameter became obsolete by the addition of the new
-			multi_leg_info parameter. The multi-leg accounting is automatically
+			The parameter becaome obsolete by the addition of the new
+			multi_leg_info parameter. The multi-leg accouting is automatically
 			enabled when multi_leg_info is defined.
 			</para>
 		</answer>
@@ -90,8 +90,8 @@
 			should be sent to &kamailiodevmail;.
 		</para>
 		<para>
-			Please report security issues to
-			&kamailioprivatemail;.
+			If you want to keep the mail private, send it to 
+			&kamailiohelpmail;.
 		</para>
 		</answer>
 	</qandaentry>

@@ -201,9 +201,6 @@ static int split_fields(char *part, int *n, struct xlstr **strs) {
 	int i, res;
 	char *c, *fld;
 
-	if(part==NULL || *part=='\0' || strs==NULL)
-		return -1;
-
 	*n = 0;
 	*strs = 0;
 	c = part;
@@ -213,7 +210,7 @@ static int split_fields(char *part, int *n, struct xlstr **strs) {
 		(*n)++;
 	}
 	*strs = pkg_malloc( (*n)*sizeof(**strs));
-	if (*strs==NULL) {
+	if (!strs) {
 		ERR(MODULE_NAME": split_fields: not enough pkg memory\n");
 		return E_OUT_OF_MEM;
 	}
@@ -488,7 +485,7 @@ static int parse_xlstr(struct xlstr* s) {
 
 	if (!s->s) return 0;
 	if (!strchr(s->s, '%')) return 0;
-	/* probably xl_log formatting */
+	/* probably xl_log formating */
 
 	if (!xl_print) {
 		xl_print=(xl_print_log_f*)find_export("xprint", NO_SCRIPT, 0);
@@ -535,7 +532,7 @@ static int eval_xlstr(struct sip_msg* msg, struct xlstr* s) {
 	if (s->xlfmt) {
 		len = xlbuf_size - (xlbuf_tail-xlbuf);
 		if (xl_print(msg, s->xlfmt, xlbuf_tail, &len) < 0) {
-			ERR(MODULE_NAME": eval_xlstr: Error while formatting result\n");
+			ERR(MODULE_NAME": eval_xlstr: Error while formating result\n");
 			return E_UNSPEC;
 		}
 
@@ -1043,27 +1040,12 @@ static int mod_init(void) {
 	for (p=dbops_actions; p; p=p->next) {
 		int res;
 		res = init_action(p);
-		if (res < 0) {
-			pkg_free(xlbuf);
-			xlbuf = NULL;
+		if (res < 0)
 			return res;
-		}
 	}
 
-	if(register_script_cb(dbops_pre_script_cb,
-			REQUEST_CB | ONREPLY_CB | PRE_SCRIPT_CB, 0)<0) {
-		LM_ERR("failed to register pre script callback\n");
-		pkg_free(xlbuf);
-		xlbuf = NULL;
-		return -1;
-	}
-	if(register_script_cb(dbops_post_script_cb,
-			REQUEST_CB | ONREPLY_CB | POST_SCRIPT_CB, 0)<0) {
-		LM_ERR("failed to register post script callback\n");
-		pkg_free(xlbuf);
-		xlbuf = NULL;
-		return -1;
-	}
+	register_script_cb(dbops_pre_script_cb, REQUEST_CB | ONREPLY_CB | PRE_SCRIPT_CB, 0);
+	register_script_cb(dbops_post_script_cb, REQUEST_CB | ONREPLY_CB | POST_SCRIPT_CB, 0);
 	register_select_table(sel_declaration);
 
 	return 0;
