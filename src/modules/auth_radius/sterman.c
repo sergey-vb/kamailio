@@ -75,7 +75,7 @@ static inline int extract_avp(
 	if(vp->attribute == attrs[A_SIP_AVP].v && vp->type == PW_TYPE_STRING) {
 		p = strchr(vp->strvalue, '#');
 		q = strchr(vp->strvalue, ':');
-		if(!q && p == vp->strvalue && vp->strvalue + sizeof(char) != '\0') {
+		if(!q && p == vp->strvalue && *(vp->strvalue + sizeof(char)) != '\0') {
 			r = p;
 			r = strchr(r++, '#');
 		} else
@@ -93,7 +93,7 @@ static inline int extract_avp(
 			name->s.len = p - vp->strvalue;
 			name->s.s = vp->strvalue;
 			value->n = strtol(++p, &r, 10);
-		} else if(p && p != r && !q) {
+		} else if(p && r && p != r && !q) {
 			/* int name and int vale */
 			name->n = strtol(++p, &q, 10);
 			value->n = strtol(++r, &q, 10);
