@@ -48,12 +48,13 @@ static int w_msg_iflag_reset(sip_msg_t *msg, char *pflag, char *p2);
 static int w_msg_iflag_is_set(sip_msg_t *msg, char *pflag, char *p2);
 static int w_file_read(sip_msg_t *msg, char *fn, char *vn);
 static int w_file_write(sip_msg_t *msg, char *fn, char *vn);
-static int w_isxflagset(struct sip_msg *msg, char *flag, str *s2);
-static int w_resetxflag(struct sip_msg *msg, char *flag, str *s2);
+static int w_isxflagset(struct sip_msg *msg, char *flag, char *s2);
+static int w_resetxflag(struct sip_msg *msg, char *flag, char *s2);
 static int w_setxflag(struct sip_msg *msg, char *flag, char *s2);
 static int w_set_send_socket(sip_msg_t *msg, char *psock, char *p2);
 static int w_set_recv_socket(sip_msg_t *msg, char *psock, char *p2);
 static int w_set_source_address(sip_msg_t *msg, char *paddr, char *p2);
+static int w_via_add_srvid(sip_msg_t *msg, char *pflags, char *p2);
 
 static int fixup_file_op(void** param, int param_no);
 
@@ -111,6 +112,8 @@ static cmd_export_t cmds[]={
 		0, ANY_ROUTE },
 	{"set_source_address", (cmd_function)w_set_source_address, 1, fixup_spve_null,
 		0, ANY_ROUTE },
+	{"via_add_srvid", (cmd_function)w_via_add_srvid, 1, fixup_igp_null,
+		0, ANY_ROUTE },
 
 	{0, 0, 0, 0, 0, 0}
 };
@@ -120,7 +123,7 @@ static param_export_t params[]={
 		(void*)corex_alias_subdomains_param},
 	{"network_io_intercept",	INT_PARAM, &nio_intercept},
 	{"min_msg_len",				INT_PARAM, &nio_min_msg_len},
-	{"msg_avp",			  		PARAM_STR, &nio_msg_avp_param},
+	{"msg_avp",					PARAM_STR, &nio_msg_avp_param},
 
 	{0, 0, 0}
 };
@@ -495,7 +498,7 @@ static int ki_isxflagset(sip_msg_t *msg, int fval)
 /**
  *
  */
-static int w_isxflagset(sip_msg_t *msg, char *flag, str *s2)
+static int w_isxflagset(sip_msg_t *msg, char *flag, char *s2)
 {
 	int fval=0;
 	if(fixup_get_ivalue(msg, (gparam_t*)flag, &fval)!=0) {
@@ -518,7 +521,7 @@ static int ki_resetxflag(sip_msg_t *msg, int fval)
 /**
  *
  */
-static int w_resetxflag(sip_msg_t *msg, char *flag, str *s2)
+static int w_resetxflag(sip_msg_t *msg, char *flag, char *s2)
 {
 	int fval=0;
 	if(fixup_get_ivalue(msg, (gparam_t*)flag, &fval)!=0) {
@@ -690,6 +693,34 @@ static int w_set_source_address(sip_msg_t *msg, char *paddr, char *p2)
 /**
  *
  */
+static int ki_via_add_srvid(sip_msg_t *msg, int fval)
+{
+	if(msg==NULL)
+		return -1;
+	if(fval) {
+		msg->msg_flags |= FL_ADD_SRVID;
+	} else {
+		msg->msg_flags &= ~(FL_ADD_SRVID);
+	}
+	return 1;
+}
+
+/**
+ *
+ */
+static int w_via_add_srvid(sip_msg_t *msg, char *pflags, char *s2)
+{
+	int fval=0;
+	if(fixup_get_ivalue(msg, (gparam_t*)pflags, &fval)!=0) {
+		LM_ERR("no flag value\n");
+		return -1;
+	}
+	return ki_via_add_srvid(msg, fval);
+}
+
+/**
+ *
+ */
 /* clang-format off */
 static sr_kemi_t sr_kemi_corex_exports[] = {
 	{ str_init("corex"), str_init("append_branch"),
@@ -735,6 +766,11 @@ static sr_kemi_t sr_kemi_corex_exports[] = {
 	{ str_init("corex"), str_init("set_source_address"),
 		SR_KEMIP_INT, ki_set_source_address,
 		{ SR_KEMIP_STR, SR_KEMIP_NONE, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("corex"), str_init("via_add_srvid"),
+		SR_KEMIP_INT, ki_via_add_srvid,
+		{ SR_KEMIP_INT, SR_KEMIP_NONE, SR_KEMIP_NONE,
 			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
 	},
 
