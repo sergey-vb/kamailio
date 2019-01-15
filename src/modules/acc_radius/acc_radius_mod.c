@@ -108,14 +108,12 @@ struct module_exports exports= {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,       /* exported functions */
 	params,     /* exported params */
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
+	0,          /* exported RPC methods */
 	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	mod_init,   /* initialization module */
 	0,          /* response function */
-	destroy,    /* destroy function */
-	child_init  /* per-child init function */
+	mod_init,   /* initialization module */
+	child_init, /* per-child init function */
+	destroy     /* destroy function */
 };
 /* clang-format on */
 
@@ -144,9 +142,9 @@ static int mod_init(void)
 	memset(&_acc_radius_engine, 0, sizeof(acc_engine_t));
 
 	if(radius_flag != -1)
-		_acc_radius_engine.acc_flag = 1 << radius_flag;
+		_acc_radius_engine.acc_flag = radius_flag;
 	if(radius_missed_flag != -1)
-		_acc_radius_engine.missed_flag = 1 << radius_missed_flag;
+		_acc_radius_engine.missed_flag = radius_missed_flag;
 	_acc_radius_engine.acc_req = acc_radius_send_request;
 	_acc_radius_engine.acc_init = acc_radius_init;
 	memcpy(_acc_radius_engine.name, "radius", 6);
@@ -186,7 +184,7 @@ static int acc_api_fixup(void **param, int param_no)
 	if(param_no == 1) {
 		accp = (struct acc_param *)pkg_malloc(sizeof(struct acc_param));
 		if(!accp) {
-			LM_ERR("no more pkg mem\n");
+			PKG_MEM_ERROR;
 			return E_OUT_OF_MEM;
 		}
 		memset(accp, 0, sizeof(struct acc_param));

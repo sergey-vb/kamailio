@@ -42,35 +42,38 @@ unsigned int init_flag = 0;
 extern int cfgt_mask;
 extern str cfgt_basedir;
 extern str cfgt_hdr_prefix;
-
+/* clang-format off */
 /*! \brief
  * Exported functions
  */
 static cmd_export_t cmds[] = {
-		{"cfgt_bind_cfgt", (cmd_function)bind_cfgt, 1, 0, 0, 0},
-		{0, 0, 0, 0, 0, 0}};
+	{"cfgt_bind_cfgt", (cmd_function)bind_cfgt, 1, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0}
+};
 
 /*! \brief
  * Exported parameters
  */
-static param_export_t params[] = {{"basedir", PARAM_STR, &cfgt_basedir},
-		{"mask", INT_PARAM, &cfgt_mask},
-		{"callid_prefix", PARAM_STR, &cfgt_hdr_prefix}, {0, 0, 0}};
-
-struct module_exports exports = {
-		"cfgt", DEFAULT_DLFLAGS, /*!< dlopen flags */
-		cmds,					 /*!< Exported functions */
-		params,					 /*!< Export parameters */
-		0,						 /*!< exported statistics */
-		0,						 /*!< exported MI functions */
-		0,						 /*!< exported pseudo-variables */
-		0,						 /*!< extra processes */
-		mod_init,				 /*!< Module initialization function */
-		0,						 /*!< Response function */
-		destroy,				 /*!< Destroy function */
-		child_init				 /*!< Child initialization function */
+static param_export_t params[] = {
+	{"basedir", PARAM_STR, &cfgt_basedir},
+	{"mask", INT_PARAM, &cfgt_mask},
+	{"callid_prefix", PARAM_STR, &cfgt_hdr_prefix},
+	{0, 0, 0}
 };
 
+struct module_exports exports = {
+	"cfgt",          /* module name */
+	DEFAULT_DLFLAGS, /* dlopen flags */
+	cmds,            /* cmd (cfg function) exports */
+	params,          /* param exports */
+	0,               /* RPC method exports */
+	0,               /* pseudo-variables exports */
+	0,               /* response handling function */
+	mod_init,        /* module init function */
+	child_init,      /* per-child init function */
+	destroy          /* module destroy function */
+};
+/* clang-format on */
 /*! \brief
  * Module initialization function
  */
@@ -103,5 +106,4 @@ static int child_init(int _rank)
  * Module destroy function
  */
 static void destroy(void)
-{
-}
+{}

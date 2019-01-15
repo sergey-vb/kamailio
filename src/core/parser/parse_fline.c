@@ -125,6 +125,11 @@ char* parse_first_line(char* buffer, unsigned int len, struct msg_start* fl)
 	else IFISMETHOD( UPDATE, 'U')
 	else IFISMETHOD( REFER, 'R')
 	else IFISMETHOD( PUBLISH, 'P')
+	else IFISMETHOD( KDMQ, 'K')
+	else IFISMETHOD( GET, 'G')
+	else IFISMETHOD( POST, 'P')
+	else IFISMETHOD( PUT, 'P')
+	else IFISMETHOD( DELETE, 'D')
 	/* if you want to add another method XXX, include METHOD_XXX in
            H-file (this is the value which you will take later in
            processing and define XXX_LEN as length of method name;
@@ -251,7 +256,9 @@ error:
 			else *(prn+t)=(char)176; /* '°' */
 		LOG(L_DBG, "parsed so far: %.*s\n", offset, ZSW(prn) );
 		pkg_free( prn );
-	};
+	} else {
+		PKG_MEM_ERROR;
+	}
 error1:
 	fl->type=SIP_INVALID;
 	LOG(cfg_get(core, core_cfg, corelog), "parse_first_line: bad message (offset: %d)\n", offset);

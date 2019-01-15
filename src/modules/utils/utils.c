@@ -116,18 +116,16 @@ static mi_export_t mi_cmds[] = {
 
 /* Module interface */
 struct module_exports exports = {
-	"utils",
+	"utils",         /* module name */
 	DEFAULT_DLFLAGS, /* dlopen flags */
-	cmds,      /* Exported functions */
-	params,    /* Exported parameters */
-	0,         /* exported statistics */
-	0,         /* exported MI functions */
-	0,         /* exported pseudo-variables */
-	0,         /* extra processes */
-	mod_init,  /* module initialization function */
-	0,         /* response function*/
-	destroy,   /* destroy function */
-	child_init /* per-child init function */
+	cmds,            /* exported functions */
+	params,          /* exported parameters */
+	0,               /* exported rpc functions */
+	0,               /* exported pseudo-variables */
+	0,               /* response handling function*/
+	mod_init,        /* module init function */
+	child_init,      /* per-child init function */
+	destroy          /* destroy function */
 };
 
 
@@ -189,7 +187,7 @@ static int pres_db_init(void) {
 	}
 	if (db_check_table_version(&pres_dbf, pres_dbh, &xcap_table,
 				XCAP_TABLE_VERSION) < 0) {
-		LM_ERR("during table version check\n");
+		DB_TABLE_VERSION_ERROR(xcap_table);
 		pres_db_close();
 		return -1;
 	}

@@ -159,18 +159,16 @@ static param_export_t params[] = {
  * MODULE EXPORTS
  */
 struct module_exports exports= {
-	"sca",
+	"sca",           /* module name */
 	DEFAULT_DLFLAGS, /* dlopen flags */
-	cmds,
-	params,
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
-	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	sca_mod_init,
-	0,
-	sca_mod_destroy,
-	sca_child_init  /* per-child init function */
+	cmds,            /* cmd exports */
+	params,          /* param exports */
+	0,               /* exported RPC functions */
+	0,               /* exported pseudo-variables */
+	0,               /* response handling function */
+	sca_mod_init,    /* module init function */
+	sca_child_init,  /* per-child init function */
+	sca_mod_destroy  /* module destroy function */
 };
 
 static int sca_bind_sl(sca_mod *scam, sl_api_t *sl_api)
@@ -224,11 +222,8 @@ static int sca_bind_srdb1(sca_mod *scam, db_func_t *db_api)
 
 	if (db_check_table_version(db_api, db_con, scam->cfg->subs_table,
 			SCA_DB_SUBSCRIPTIONS_TABLE_VERSION) < 0) {
-		LM_ERR("Version check of %.*s table in DB %.*s failed\n",
-				STR_FMT(scam->cfg->subs_table), STR_FMT(scam->cfg->db_url));
-		LM_ERR("%.*s table version %d required\n",
-				STR_FMT(scam->cfg->subs_table),
-				SCA_DB_SUBSCRIPTIONS_TABLE_VERSION);
+		str tmp = *scam->cfg->subs_table;
+		DB_TABLE_VERSION_ERROR(tmp);
 		goto done;
 	}
 

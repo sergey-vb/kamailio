@@ -78,23 +78,34 @@ static int child_init(int rank);
 static void mod_destroy();
 static int fixup_sl_reply(void** param, int param_no);
 
+static int pv_get_ltt(sip_msg_t *msg, pv_param_t *param, pv_value_t *res);
+static int pv_parse_ltt_name(pv_spec_p sp, str *in);
+
+
+static pv_export_t mod_pvs[] = {
+	{ {"ltt", (sizeof("ltt")-1)}, PVT_OTHER, pv_get_ltt, 0,
+		pv_parse_ltt_name, 0, 0, 0 },
+
+	{ {0, 0}, 0, 0, 0, 0, 0, 0, 0 }
+};
+
 static cmd_export_t cmds[]={
-	{"sl_send_reply",  w_sl_send_reply,             2, fixup_sl_reply,
+	{"sl_send_reply",  w_sl_send_reply,             2, fixup_sl_reply, 0,
 		REQUEST_ROUTE},
-	{"sl_reply",       w_sl_send_reply,             2, fixup_sl_reply,
+	{"sl_reply",       w_sl_send_reply,             2, fixup_sl_reply, 0,
 		REQUEST_ROUTE},
-	{"send_reply",     w_send_reply,                2, fixup_sl_reply,
+	{"send_reply",     w_send_reply,                2, fixup_sl_reply, 0,
 		REQUEST_ROUTE|ONREPLY_ROUTE|FAILURE_ROUTE},
-	{"sl_reply_error", w_sl_reply_error,            0, 0,
+	{"sl_reply_error", w_sl_reply_error,            0, 0, 0,
 		REQUEST_ROUTE},
-	{"sl_forward_reply",  w_sl_forward_reply0,      0, 0,
+	{"sl_forward_reply",  w_sl_forward_reply0,      0, 0, 0,
 		ONREPLY_ROUTE},
-	{"sl_forward_reply",  w_sl_forward_reply1,      1, fixup_spve_all,
+	{"sl_forward_reply",  w_sl_forward_reply1,      1, fixup_spve_all, 0,
 		ONREPLY_ROUTE},
-	{"sl_forward_reply",  w_sl_forward_reply2,      2, fixup_spve_all,
+	{"sl_forward_reply",  w_sl_forward_reply2,      2, fixup_spve_all, 0,
 		ONREPLY_ROUTE},
-	{"bind_sl",        (cmd_function)bind_sl,       0, 0,              0},
-	{0,0,0,0,0}
+	{"bind_sl",        (cmd_function)bind_sl,       0, 0, 0,           0},
+	{0,0,0,0,0,0}
 };
 
 
@@ -115,15 +126,16 @@ struct module_exports sl_exports = {
 #else
 struct module_exports exports= {
 #endif
-	"sl",
-	cmds,
-	sl_rpc,     /* RPC methods */
-	params,     /* param exports */
-	mod_init,   /* module initialization function */
-	(response_function) 0,
-	mod_destroy,
-	0,
-	child_init  /* per-child init function */
+	"sl",				/* module name */
+	DEFAULT_DLFLAGS,	/* dlopen flags */
+	cmds,				/* cmd (cfg function) exports */
+	params,			    /* param exports */
+	sl_rpc,			    /* RPC method exports */
+	mod_pvs,			/* pv exports */
+	0,					/* response handling function */
+	mod_init,			/* module init function */
+	child_init,			/* per-child init function */
+	mod_destroy			/* module destroy function */
 };
 
 
@@ -249,6 +261,11 @@ int send_reply(struct sip_msg *msg, int code, str *reason)
 	char *r = NULL;
 	struct cell *t;
 	int ret = 1;
+
+	if(msg->msg_flags & FL_MSG_NOREPLY) {
+		LM_INFO("message marked with no-reply flag\n");
+		return -2;
+	}
 
 	if(reason->s[reason->len-1]=='\0') {
 		r = reason->s;
@@ -478,6 +495,83 @@ static int w_sl_forward_reply2(sip_msg_t* msg, char* str1, char* str2)
 	}
 	return w_sl_forward_reply(msg, &code, &reason);
 }
+
+/**
+ *
+ */
+static int pv_get_ltt(sip_msg_t *msg, pv_param_t *param, pv_value_t *res)
+{
+	str ttag = STR_NULL;
+	tm_cell_t *t = NULL;
+
+	if(msg==NULL)
+		return pv_get_null(msg, param, res);
+
+	if(param==NULL)
+		return pv_get_null(msg, param, res);
+
+	switch(param->pvn.u.isname.name.n) {
+		case 0: /* mixed */
+			if(get_reply_totag(msg, &ttag)<0) {
+				return pv_get_null(msg, param, res);
+			}
+			return pv_get_strval(msg, param, res, &ttag);
+		case 1: /* stateless */
+			if(sl_get_reply_totag(msg, &ttag)<0) {
+				return pv_get_null(msg, param, res);
+			}
+			return pv_get_strval(msg, param, res, &ttag);
+		case 2: /* transaction stateful */
+			if(sl_bind_tm==0 || tmb.t_gett==0) {
+				return pv_get_null(msg, param, res);
+			}
+
+			t = tmb.t_gett();
+			if(t== NULL || t==T_UNDEFINED) {
+				return pv_get_null(msg, param, res);
+			}
+			if(tmb.t_get_reply_totag(msg, &ttag)<0) {
+				return pv_get_null(msg, param, res);
+			}
+			return pv_get_strval(msg, param, res, &ttag);
+		default:
+			return pv_get_null(msg, param, res);
+	}
+}
+
+/**
+ *
+ */
+static int pv_parse_ltt_name(pv_spec_p sp, str *in)
+{
+	if(sp==NULL || in==NULL || in->len<=0)
+		return -1;
+
+	switch(in->len) {
+		case 1:
+			if(strncmp(in->s, "x", 1)==0) {
+				sp->pvp.pvn.u.isname.name.n = 0;
+			} else if(strncmp(in->s, "s", 1)==0) {
+				sp->pvp.pvn.u.isname.name.n = 1;
+			} else if(strncmp(in->s, "t", 1)==0) {
+				sp->pvp.pvn.u.isname.name.n = 2;
+			} else {
+				goto error;
+			}
+		break;
+		default:
+			goto error;
+	}
+	sp->pvp.pvn.type = PV_NAME_INTSTR;
+	sp->pvp.pvn.u.isname.type = 0;
+
+	return 0;
+
+error:
+	LM_ERR("unknown PV ltt key: %.*s\n", in->len, in->s);
+	return -1;
+}
+
 
 /**
  * @brief bind functions to SL API structure

@@ -82,7 +82,7 @@ static param_export_t params[]={
 	{ "db_url",					PARAM_STR,         &xcap_db_url    },
 	{ "xcap_table",				PARAM_STR,         &xcap_db_table  },
 	{ "periodical_query",		INT_PARAM,         &periodical_query },
-	{ "query_period",	       	INT_PARAM,         &query_period     },
+	{ "query_period",			INT_PARAM,         &query_period     },
 	{    0,                     0,                      0            }
 };
 
@@ -95,18 +95,16 @@ static cmd_export_t  cmds[]=
 
 /** module exports */
 struct module_exports exports= {
-	"xcap_client",				/* module name */
-	DEFAULT_DLFLAGS,			/* dlopen flags */
-	cmds,  						/* exported functions */
-	params,						/* exported parameters */
-	0,      					/* exported statistics */
-	0,		   					/* exported MI functions */
-	0,							/* exported pseudo-variables */
-	0,							/* extra processes */
-	mod_init,					/* module initialization function */
-	0,							/* response handling function */
-	(destroy_function) destroy, /* destroy function */
-	child_init					/* per-child init function */
+	"xcap_client",   /* module name */
+	DEFAULT_DLFLAGS, /* dlopen flags */
+	cmds,            /* exported functions */
+	params,          /* exported parameters */
+	0,               /* exported rpc functions */
+	0,               /* exported pseudo-variables */
+	0,               /* response handling function */
+	mod_init,        /* module init function */
+	child_init,      /* child init function */
+	destroy          /* module destroy function */
 };
 
 /**
@@ -142,7 +140,9 @@ static int mod_init(void)
 
 	if(db_check_table_version(&xcap_dbf, xcap_db, &xcap_db_table,
 				XCAP_TABLE_VERSION) < 0) {
-		LM_ERR("error during table version check.\n");
+		DB_TABLE_VERSION_ERROR(xcap_db_table);
+		xcap_dbf.close(xcap_db);
+		xcap_db = NULL;
 		return -1;
 	}
 	xcap_dbf.close(xcap_db);

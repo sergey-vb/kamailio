@@ -164,7 +164,7 @@ static pv_export_t pvs[] = {
 /* exported parameters */
 static param_export_t parameters[] =
 {
-		/* Kamailo C node parameters */
+		/* Kamailio C node parameters */
 		{ "no_cnodes", PARAM_INT, &no_cnodes },
 		{ "cnode_alivename", PARAM_STR, &cnode_alivename },
 		{ "cnode_host", PARAM_STR, &cnode_host },
@@ -193,18 +193,16 @@ static cmd_export_t commands[] =
 
 
 struct module_exports exports = {
-		"erlang",
-		DEFAULT_DLFLAGS,
-		commands,
-		parameters,
-		NULL,
-		NULL,
-		pvs,
-		NULL,
-		mod_init,
-		NULL,
-		mod_destroy,
-		child_init
+		"erlang",			/* module name */
+		DEFAULT_DLFLAGS,	/* dlopen flags */
+		commands,			/* exported functions */
+		parameters,			/* exported parameters */
+		0,					/* RPC method exports */
+		pvs,				/* exported pseudo-variables */
+		0,					/* response handling function */
+		mod_init,			/* module initialization function */
+		child_init,			/* per-child init function */
+		mod_destroy			/* module destroy function */
 };
 
 /**
@@ -285,7 +283,6 @@ static int child_init(int rank)
 
 	if (rank == PROC_INIT) {
 
-#ifdef SHM_MEM
 		usocks[KSOCKET]=(int*)shm_malloc(sizeof(int)*no_cnodes);
 		if (!usocks[KSOCKET]) {
 			LM_ERR("Not enough memory\n");
@@ -297,19 +294,6 @@ static int child_init(int rank)
 			LM_ERR("Not enough memory\n");
 			return -1;
 		}
-#else
-		usocks[KSOCKET]=(int*)pkg_malloc(sizeof(int)*no_cnodes);
-		if (!usocks[KSOCKET]) {
-			LM_ERR("Not enough memory\n");
-			return -1;
-		}
-
-		usocks[CSOCKET]=(int*)pkg_malloc(sizeof(int)*no_cnodes);
-		if (!usocks[CSOCKET]) {
-			LM_ERR("Not enough memory\n");
-			return -1;
-		}
-#endif
 
 		for(i=0;i<no_cnodes;i++) {
 			if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair)) {
@@ -399,13 +383,8 @@ static int child_init(int rank)
  */
 static void mod_destroy(void)
 {
-#ifdef SHM_MEM
 		shm_free(usocks[0]);
 		shm_free(usocks[1]);
-#else
-		pkg_free(usocks[0]);
-		pkg_free(usocks[1]);
-#endif
 		free_tuple_fmt_buff();
 		free_atom_fmt_buff();
 		free_list_fmt_buff();

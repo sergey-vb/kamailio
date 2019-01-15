@@ -133,18 +133,16 @@ static param_export_t params[] = {
  */
 /* clang-format off */
 struct module_exports exports = {
-	"domain",
-	DEFAULT_DLFLAGS, /* dlopen flags */
-	cmds,      /* Exported functions */
-	params,    /* Exported parameters */
-	0,         /* exported statistics */
-	0,         /* exported MI functions */
-	0,         /* exported pseudo-variables */
-	0,         /* extra processes */
-	mod_init,  /* module initialization function */
-	0,         /* response function*/
-	destroy,   /* destroy function */
-	child_init /* per-child init function */
+	"domain",			/* module name */
+	DEFAULT_DLFLAGS,	/* dlopen flags */
+	cmds,				/* exported functions */
+	params,				/* exported parameters */
+	0,					/* RPC method exports */
+	0,					/* exported pseudo-variables */
+	0,					/* response handling function */
+	mod_init,			/* module initialization function */
+	child_init,			/* per-child init function */
+	destroy				/* module destroy function */
 };
 /* clang-format on */
 
@@ -178,12 +176,12 @@ static int mod_init(void)
 		return -1;
 	}
 	if(domain_db_ver(&domain_table, DOMAIN_TABLE_VERSION) < 0) {
-		LM_ERR("error during check of domain table version\n");
+		DB_TABLE_VERSION_ERROR(domain_table);
 		domain_db_close();
 		goto error;
 	}
 	if(domain_db_ver(&domain_attrs_table, DOMAIN_ATTRS_TABLE_VERSION) < 0) {
-		LM_ERR("error during check of domain_attrs table version\n");
+		DB_TABLE_VERSION_ERROR(domain_attrs_table);
 		domain_db_close();
 		goto error;
 	}

@@ -654,7 +654,7 @@ int tps_redis_load_invite_branch(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd)
 		sval.s = NULL;
 		switch(rrpl->element[i]->type) {
 			case REDIS_REPLY_STRING:
-				LM_DBG("r[%d]: s[%.*s]\n", i, rrpl->element[i]->len,
+				LM_DBG("r[%d]: s[%.*s]\n", i, (int)rrpl->element[i]->len,
 						rrpl->element[i]->str);
 				sval.s = rrpl->element[i]->str;
 				sval.len = rrpl->element[i]->len;
@@ -737,7 +737,12 @@ int tps_redis_load_branch(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd,
 			LM_ERR("failed to load the INVITE branch value\n");
 			return -1;
 		}
+		memset(&id, 0, sizeof(tps_data_t));
 		xvbranch1 = &id.x_vbranch1;
+	}
+	if(xvbranch1->len<=0 || xvbranch1->s==NULL) {
+		LM_DBG("branch value not found (mode: %u)\n", mode);
+		return 1;
 	}
 	rp = _tps_redis_cbuf;
 	memcpy(rp, _tps_redis_bprefix.s, _tps_redis_bprefix.len);
@@ -802,7 +807,7 @@ int tps_redis_load_branch(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd,
 		sval.s = NULL;
 		switch(rrpl->element[i]->type) {
 			case REDIS_REPLY_STRING:
-				LM_DBG("r[%d]: s[%.*s]\n", i, rrpl->element[i]->len,
+				LM_DBG("r[%d]: s[%.*s]\n", i, (int)rrpl->element[i]->len,
 						rrpl->element[i]->str);
 				sval.s = rrpl->element[i]->str;
 				sval.len = rrpl->element[i]->len;
@@ -1005,7 +1010,7 @@ int tps_redis_load_dialog(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd)
 		sval.s = NULL;
 		switch(rrpl->element[i]->type) {
 			case REDIS_REPLY_STRING:
-				LM_DBG("r[%d]: s[%.*s]\n", i, rrpl->element[i]->len,
+				LM_DBG("r[%d]: s[%.*s]\n", i, (int)rrpl->element[i]->len,
 						rrpl->element[i]->str);
 				sval.s = rrpl->element[i]->str;
 				sval.len = rrpl->element[i]->len;
@@ -1116,7 +1121,7 @@ int tps_redis_update_branch(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd,
 		return -1;
 	}
 
-	if(md->s_method.len==6 && strncmp(md->s_method.s, "INVITE", 7)==0) {
+	if(md->s_method.len==6 && strncmp(md->s_method.s, "INVITE", 6)==0) {
 		if(tps_redis_insert_invite_branch(md)<0) {
 			LM_ERR("failed to insert INVITE extra branch data\n");
 			return -1;
@@ -1313,6 +1318,10 @@ int tps_redis_end_dialog(sip_msg_t *msg, tps_data_t *md, tps_data_t *sd)
 	redisReply *rrpl = NULL;
 	int32_t liflags;
 	unsigned long lval = 0;
+
+	if(md->s_method_id != METHOD_BYE) {
+		return 0;
+	}
 
 	if(sd->a_uuid.len<=0 && sd->b_uuid.len<=0) {
 		LM_INFO("no uuid for this message\n");

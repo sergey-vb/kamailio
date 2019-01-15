@@ -555,8 +555,9 @@ if(sdp_with_ice()) {
 			<function moreinfo="none">sdp_get_line_startswith(avpvar, string)</function>
 		</title>
 		<para>
-			Store the search part of SDP body message with line beginning with 'string' in an AVP. 
+			Store the search part of SDP body message with line beginning with 'string' in an AVP.
 			Return 1 if 'string' is found in SDP, -1 on error and -2 if there is no SDP part in the message body.
+			The second parameter can contain pseudo-variables.
 		</para>
 		<para>
 			This function can be used from ANY_ROUTE.
@@ -572,6 +573,47 @@ if(sdp_get_line_startswith("$avp(mline)", "m=")) {
 </programlisting>
 		</example>
 	</section>
-	</section>
-</chapter>
+	<section id="sdpops.f.sdp_get_address_family">
+			<title>
+		<function moreinfo="none">sdp_get_address_family()</function>
+			</title>
+			<para>
+			it helps to get IP address family at c line from sdp body.
+			it returns -1 on error , 4 for IP4 and 6 for IP6
+			</para>
+		<example>
+		<title><function>sdp_get_address_family</function>usage</title>
+		<programlisting format="linespecific">
+	...
+	if(is_method("INVITE") && has_body("application/sdp")){
 
+		$avp(af) = sdp_get_address_family();
+		xlog("L_INFO","ADDRESS FAMILY OF SDP C line $avp(af) ");
+	}
+	...
+	</programlisting>
+			</example>
+	</section>
+
+	</section>
+
+	<section>
+		<title>Exported Variables</title>
+		<section>
+			<title><varname>$sdp( )</varname></title>
+			<para>Access to SDP attributes</para>
+				<itemizedlist>
+				<listitem><para>
+					<emphasis>$sdp(body)</emphasis> - full SDP body (read only)
+				</para></listitem>
+				<listitem><para>
+					<emphasis>$sdp(sess_version)</emphasis> - sess-version -attribute from SDP o= -line. When set to special value -1, current value is incremented. (read + write)
+				</para></listitem>
+				</itemizedlist>
+			<para>
+			Exported pseudo-variables are also documented at &kamwikilink;
+			</para>
+		</section>
+	</section>
+
+</chapter>

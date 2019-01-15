@@ -80,8 +80,6 @@ static db1_con_t* dialog_db_handle    = 0; /* database connection handle */
 static db_func_t dialog_dbf;
 
 extern int dlg_enable_stats;
-extern int active_dlgs_cnt;
-extern int early_dlgs_cnt;
 extern int dlg_h_id_start;
 extern int dlg_h_id_step;
 
@@ -150,34 +148,39 @@ int init_dlg_db(const str *db_url, int dlg_hash_size , int db_update_period, int
 	}
 
 	if(db_check_table_version(&dialog_dbf, dialog_db_handle, &dialog_table_name, DLG_TABLE_VERSION) < 0) {
-		LM_ERR("Error during dialog table version check. Please check the database structure.\n");
-		return -1;
+		DB_TABLE_VERSION_ERROR(dialog_table_name);
+		goto dberror;
 	}
 
 	if(db_check_table_version(&dialog_dbf, dialog_db_handle, &dialog_vars_table_name, DLG_VARS_TABLE_VERSION) < 0) {
-		LM_ERR("Error during dialog-vars table version check. Please check the database structure\n");
-		return -1;
+		DB_TABLE_VERSION_ERROR(dialog_vars_table_name);
+		goto dberror;
 	}
 
 	if( (dlg_db_mode==DB_MODE_DELAYED) && (register_timer( dialog_update_db, 0, db_update_period)<0 )) {
 		LM_ERR("Failed to register update db timer\n");
-		return -1;
+		goto dberror;
 	}
 
 	if ( db_skip_load == 0 ) {
 		if( (load_dialog_info_from_db(dlg_hash_size, fetch_num_rows, 0, NULL) ) !=0 ){
 			LM_ERR("Unable to load the dialog data\n");
-			return -1;
+			goto dberror;
 		}
 		if( (load_dialog_vars_from_db(fetch_num_rows, 0, NULL) ) !=0 ){
 			LM_ERR("Unable to load the dialog variable data\n");
-			return -1;
+			goto dberror;
 		}
 	}
 	dialog_dbf.close(dialog_db_handle);
 	dialog_db_handle = 0;
 
 	return 0;
+
+dberror:
+	dialog_dbf.close(dialog_db_handle);
+	dialog_db_handle = 0;
+	return -1;
 }
 
 
@@ -414,10 +417,8 @@ int load_dialog_info_from_db(int dlg_hash_size, int fetch_num_rows,
 			dlg->state 		= VAL_INT(values+8);
 			if (dlg->state==DLG_STATE_CONFIRMED_NA ||
 			dlg->state==DLG_STATE_CONFIRMED) {
-				active_dlgs_cnt++;
 				if_update_stat(dlg_enable_stats, active_dlgs, 1);
 			} else if (dlg->state==DLG_STATE_EARLY) {
-				early_dlgs_cnt++;
 				if_update_stat(dlg_enable_stats, early_dlgs, 1);
 			}
 
@@ -464,6 +465,8 @@ int load_dialog_info_from_db(int dlg_hash_size, int fetch_num_rows,
 				srjson_DestroyDoc(&jdoc);
 			}
 			dlg->iflags = (unsigned int)VAL_INT(values+22);
+			if (dlg->state==DLG_STATE_CONFIRMED)
+				dlg_ka_add(dlg);
 
 			if (!dlg->bind_addr[DLG_CALLER_LEG] || !dlg->bind_addr[DLG_CALLEE_LEG]) {
 				/* non-local socket, probably not our dialog */
@@ -645,14 +648,14 @@ static int load_dialog_vars_from_db(int fetch_num_rows, int mode,
 					}
 					dlg = dlg->next;
 					if (!dlg) {
-						LM_WARN("insonsistent data: the dialog h_entry/h_id does not exist!\n");
+						LM_WARN("inconsistent data: the dialog h_entry/h_id does not exist!\n");
 					}
 				}
 				if(mode==1 && mval!=NULL) {
 					dlg_unlock(d_table, &(d_table->entries[VAL_INT(values)]));
 				}
 			} else {
-				LM_WARN("insonsistent data: the h_entry in the DB does not exist!\n");
+				LM_WARN("inconsistent data: the h_entry in the DB does not exist!\n");
 			}
 		}
 

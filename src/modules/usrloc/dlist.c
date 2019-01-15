@@ -43,6 +43,8 @@
 #include "usrloc_mod.h"
 
 
+extern int ul_version_table;
+
 /*! \brief Global list of all registered domains */
 dlist_t* root = 0;
 
@@ -97,8 +99,6 @@ static inline int get_all_db_ucontacts(void *buf, int len, unsigned int flags,
 	db1_res_t* res = NULL;
 	db_row_t *row;
 	dlist_t *dom;
-	str now;
-	char now_s[25];
 	int port, proto;
 	char *p;
 	str addr;
@@ -121,13 +121,6 @@ static inline int get_all_db_ucontacts(void *buf, int len, unsigned int flags,
 	/* Reserve space for terminating 0000 */
 	len -= sizeof(addr.len);
 
-	/* get the current time in DB format */
-	now.len = 25;
-	now.s = now_s;
-	if (db_time2str_ex( time(0), now.s, &now.len, 0)!=0) {
-		LM_ERR("failed to print now time\n");
-		return -1;
-	}
 	aorhash = 0;
 
 	/* select fields */
@@ -141,9 +134,8 @@ static inline int get_all_db_ucontacts(void *buf, int len, unsigned int flags,
 	/* where fields */
 	keys1[0] = &expires_col;
 	ops1[0] = OP_GT;
-	vals1[0].type = DB1_STR;
 	vals1[0].nul = 0;
-	vals1[0].val.str_val = now;
+	UL_DB_EXPIRES_SET(&vals1[0], time(0));
 
 	keys1[1] = &partition_col;
 	ops1[1] = OP_EQ;
@@ -652,20 +644,22 @@ int register_udomain(const char* _n, udomain_t** _d)
 		con = ul_dbf.init(&db_url);
 		if (!con) {
 			LM_ERR("failed to open database connection\n");
-			goto err;
+			goto dberror;
 		}
 
-		if(db_check_table_version(&ul_dbf, con, &s, UL_TABLE_VERSION) < 0) {
-			LM_ERR("error during table version check.\n");
-			goto err;
+		if(ul_version_table != 0
+				&& db_check_table_version(&ul_dbf, con, &s, UL_TABLE_VERSION) < 0) {
+			DB_TABLE_VERSION_ERROR(s);
+			goto dberror;
 		}
 		/* test if DB really exists */
 		if (testdb_udomain(con, d->d) < 0) {
 			LM_ERR("testing domain '%.*s' failed\n", s.len, ZSW(s.s));
-			goto err;
+			goto dberror;
 		}
 
 		ul_dbf.close(con);
+		con = 0;
 	}
 
 	d->next = root;
@@ -674,8 +668,9 @@ int register_udomain(const char* _n, udomain_t** _d)
 	*_d = d->d;
 	return 0;
 
-err:
+dberror:
 	if (con) ul_dbf.close(con);
+	con = 0;
 	free_udomain(d->d);
 	shm_free(d->name.s);
 	shm_free(d);

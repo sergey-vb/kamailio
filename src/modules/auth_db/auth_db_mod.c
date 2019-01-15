@@ -140,14 +140,12 @@ struct module_exports exports = {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,       /* Exported functions */
 	params,     /* Exported parameters */
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
+	0,          /* exported RPC methods */
 	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	mod_init,   /* module initialization function */
 	0,          /* response function */
-	destroy,    /* destroy function */
-	child_init  /* child initialization function */
+	mod_init,   /* module initialization function */
+	child_init, /* child initialization function */
+	destroy     /* destroy function */
 };
 
 
@@ -305,11 +303,13 @@ static int auth_fixup(void** param, int param_no)
 		if(version_table_check!=0
 				&& db_check_table_version(&auth_dbf, dbh, &name,
 					TABLE_VERSION) < 0) {
-			LM_ERR("error during table version check.\n");
+			DB_TABLE_VERSION_ERROR(name);
 			auth_dbf.close(dbh);
+			dbh = 0;
 			return -1;
 		}
 		auth_dbf.close(dbh);
+		dbh = 0;
 	}
 	return 0;
 }

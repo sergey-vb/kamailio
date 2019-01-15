@@ -88,7 +88,11 @@ MODULE_VERSION
 static int search_body_f(struct sip_msg*, char*, char*);
 static int search_hf_f(struct sip_msg*, char*, char*, char*);
 static int replace_f(struct sip_msg*, char*, char*);
+static int replace_str_f(struct sip_msg*, char*, char*, char*);
 static int replace_body_f(struct sip_msg*, char*, char*);
+static int replace_body_str_f(struct sip_msg*, char*, char*, char*);
+static int replace_hdrs_f(struct sip_msg*, char*, char*);
+static int replace_hdrs_str_f(struct sip_msg*, char*, char*, char*);
 static int replace_all_f(struct sip_msg*, char*, char*);
 static int replace_body_all_f(struct sip_msg*, char*, char*);
 static int replace_body_atonce_f(struct sip_msg*, char*, char*);
@@ -136,6 +140,8 @@ static int remove_hf_re_f(struct sip_msg* msg, char* key, char* foo);
 static int remove_hf_exp_f(sip_msg_t* msg, char* ematch, char* eskip);
 static int is_present_hf_re_f(struct sip_msg* msg, char* key, char* foo);
 static int is_audio_on_hold_f(struct sip_msg *msg, char *str1, char *str2 );
+static int regex_substring_f(struct sip_msg *msg,  char *input, char *regex,
+		char *matched_index, char *match_count, char *dst);
 static int fixup_substre(void**, int);
 static int hname_fixup(void** param, int param_no);
 static int free_hname_fixup(void** param, int param_no);
@@ -149,6 +155,7 @@ static int fixup_free_in_list_prefix(void** param, int param_no);
 int fixup_regexpNL_none(void** param, int param_no);
 static int fixup_search_hf(void** param, int param_no);
 static int fixup_subst_hf(void** param, int param_no);
+static int fixup_regex_substring(void** param, int param_no);
 
 static int mod_init(void);
 
@@ -178,8 +185,20 @@ static cmd_export_t cmds[]={
 	{"replace",          (cmd_function)replace_f,         2,
 		fixup_regexp_none, fixup_free_regexp_none,
 		ANY_ROUTE},
+	{"replace_str",      (cmd_function)replace_str_f,     3,
+		fixup_spve_all, fixup_free_spve_all,
+		ANY_ROUTE},
 	{"replace_body",     (cmd_function)replace_body_f,    2,
 		fixup_regexp_none, fixup_free_regexp_none,
+		ANY_ROUTE},
+	{"replace_body_str", (cmd_function)replace_body_str_f,3,
+		fixup_spve_all, fixup_free_spve_all,
+		ANY_ROUTE},
+	{"replace_hdrs",     (cmd_function)replace_hdrs_f,    2,
+		fixup_regexp_none, fixup_free_regexp_none,
+		ANY_ROUTE},
+	{"replace_hdrs_str", (cmd_function)replace_hdrs_str_f,3,
+		fixup_spve_all, fixup_free_spve_all,
 		ANY_ROUTE},
 	{"replace_all",      (cmd_function)replace_all_f,     2,
 		fixup_regexp_none, fixup_free_regexp_none,
@@ -317,6 +336,9 @@ static cmd_export_t cmds[]={
 	{"get_body_part",        (cmd_function)get_body_part_f,       2,
 		fixup_get_body_part, 0,
 		REQUEST_ROUTE|FAILURE_ROUTE|BRANCH_ROUTE|ONREPLY_ROUTE },
+	{"regex_substring",        (cmd_function)regex_substring_f,   5,
+		fixup_regex_substring, 0,
+		REQUEST_ROUTE|FAILURE_ROUTE|BRANCH_ROUTE|ONREPLY_ROUTE },
 
 	{"bind_textops",      (cmd_function)bind_textops,       0, 0, 0,
 		0},
@@ -329,15 +351,13 @@ struct module_exports exports= {
 	"textops",  /* module name*/
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,       /* exported functions */
-	0,          /* module parameters */
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
+	0,          /* exported parameters */
+	0,          /* exported rpc functions */
 	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	mod_init,   /* module initialization function */
-	0,          /* response function */
-	0,          /* destroy function */
+	0,          /* response handling function */
+	mod_init,   /* module init function */
 	0,          /* per-child init function */
+	0           /* module destroy function */
 };
 
 
@@ -752,6 +772,170 @@ static int replace_helper(sip_msg_t *msg, regex_t *re, str *val)
 	return -1;
 }
 
+/**
+ * it helps to get substring from a string with regular expression ,regexec()
+ * after findingf substring, function sets destination pseudo-variable as given
+ * @param input - given strings
+ * @param regex - reguler expression as REG_EXTENDED
+ * @param mindex - index number for finding array, when nmatch is non-zero,
+ *   points to an array with at least nmatch elements.
+ * @param nmatch - is the number of matches allowed
+ * @param dst - given pseudo-variable, result will be setted
+ * @return : 1 is success, -1 or less is failed
+*/
+static int ki_regex_substring(sip_msg_t* msg, str *input, str *regex,
+		int mindex, int nmatch, str *dst)
+{
+	regex_t preg;
+	regmatch_t* pmatch;
+	pv_spec_t *pvresult = NULL;
+	pv_value_t valx;
+	str tempstr = {0,0};
+	int rc;
+
+	if(dst == NULL || dst->s == NULL || dst->len<=0) {
+		LM_ERR("Destination pseudo-variable is empty \n");
+		return -1;
+	}
+
+	if(mindex > (nmatch-1)) {
+		LM_ERR("matched_index cannot be bigger than match_count\n");
+		return -1;
+	}
+
+	pvresult = pv_cache_get(dst);
+
+	if(pvresult == NULL) {
+		LM_ERR("Failed to malloc destination pseudo-variable \n");
+		return -1;
+	}
+
+	if(pvresult->setf==NULL) {
+		LM_ERR("destination pseudo-variable is not writable: %.*s \n",
+				dst->len, dst->s);
+		return -1;
+	}
+
+	memset(&valx, 0, sizeof(pv_value_t));
+	memset(&preg, 0, sizeof(regex_t));
+
+	pmatch=pkg_malloc(nmatch*sizeof(regmatch_t));
+
+	LM_DBG("mindex: %d\n", mindex);
+	LM_DBG("nmatch: %d\n", nmatch );
+
+	if (pmatch==0){
+		LM_ERR("couldnt malloc memory for pmatch\n");
+		return -1;
+	}
+
+	rc = regcomp(&preg, regex->s, REG_EXTENDED);
+
+	if (0 != rc) {
+		LM_ERR("regular experession coudnt be compiled, Error code: (%d)\n", rc);
+		pkg_free(pmatch);
+		regfree(&preg);
+		return -1;
+	}
+
+	rc = regexec(&preg, input->s, nmatch, pmatch, REG_EXTENDED);
+	regfree(&preg);
+	if(rc!=0) {
+		LM_DBG("no matches\n");
+		pkg_free(pmatch);
+		return -2;
+	}
+
+	/* matched */
+	if (pmatch[mindex].rm_so==-1) {
+		LM_WARN("invalid offset for regular expression result\n");
+		pkg_free(pmatch);
+		return -1;
+	}
+
+	LM_DBG("start offset %d end offset %d\n",
+			(int)pmatch[0].rm_so, (int)pmatch[0].rm_eo);
+
+	if (pmatch[mindex].rm_so==pmatch[mindex].rm_eo) {
+		LM_WARN("Matched string is empty\n");
+		pkg_free(pmatch);
+		return -1;
+	}
+
+	tempstr.len=(int)(pmatch[mindex].rm_eo - pmatch[mindex].rm_so);
+	tempstr.s=&input->s[pmatch[mindex].rm_so];
+
+	if(tempstr.s== NULL || tempstr.len<=0) {
+		LM_WARN("matched token is null\n");
+		pkg_free(pmatch);
+		return -1;
+	}
+
+	valx.flags = PV_VAL_STR;
+	valx.rs.s=tempstr.s;
+	valx.rs.len=tempstr.len;
+	LM_DBG("result: %.*s\n", valx.rs.len, valx.rs.s);
+	pvresult->setf(msg, &pvresult->pvp, (int)EQ_T, &valx);
+	pkg_free(pmatch);
+
+	return 1;
+}
+
+/**
+ * it helps to get substring from a string with regular expression ,regexec()
+ * after findingf substring, function sets destination pseudo-variable as given
+ * @param input, given strings
+ * @param regex, reguler expression as REG_EXTENDED
+ * @param matched_index, index number for finding array, when nmatch is non-zero,
+ *   points to an array with at least nmatch elements.
+ * @param match_count, is the number of matches allowed
+ * @param dst, given pseudo-variable, result will be setted
+ * @return : 1 is success, -1 or less is failed
+*/
+static int regex_substring_f(sip_msg_t *msg, char *input, char *iregex,
+		char *matched_index, char *match_count, char* dst)
+{
+	str sinput;
+	str sregex;
+	str sdst;
+	int nmatch;
+	int index;
+
+	if(fixup_get_svalue(msg, (gparam_t*)input, &sinput)!=0) {
+		LM_ERR("unable to get input string\n");
+		return -1;
+	}
+	if(fixup_get_svalue(msg, (gparam_t*)iregex, &sregex)!=0) {
+		LM_ERR("unable to get input regex\n");
+		return -1;
+	}
+	if(fixup_get_ivalue(msg, (gparam_t*)matched_index, &index)!=0) {
+		LM_ERR("unable to get index\n");
+		return -1;
+	}
+	if(fixup_get_ivalue(msg, (gparam_t*)match_count, &nmatch)!=0) {
+		LM_ERR("unable to get index\n");
+		return -1;
+	}
+	sdst.s = dst;
+	sdst.len = strlen(sdst.s);
+
+	return ki_regex_substring(msg, &sinput, &sregex, index, nmatch, &sdst);
+}
+
+static int fixup_regex_substring(void** param, int param_no)
+{
+	if (param_no == 1 || param_no == 2) {
+		return fixup_spve_all(param, param_no);
+	}
+
+	if (param_no == 3 || param_no == 4) {
+		return fixup_igp_all(param, param_no);
+	}
+
+	return 0;
+}
+
 static int replace_f(sip_msg_t* msg, char* key, char* str2)
 {
 	str val;
@@ -777,6 +961,113 @@ static int ki_replace(sip_msg_t* msg, str* sre, str* sval)
 	regfree(&mre);
 
 	return ret;
+}
+
+static char *textops_strfind(str *mbuf, str *mkey)
+{
+	char *sp;
+
+	// Sanity check
+	if(!(mbuf && mkey && mbuf->len >= mkey->len))
+		return NULL;
+
+	for(sp = mbuf->s; sp <= mbuf->s + mbuf->len - mkey->len; sp++) {
+		if(*sp == mkey->s[0] && strncmp(sp, mkey->s, mkey->len) == 0) {
+			return sp;
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * search in lbuf for mkey and replace it with rval, only first occurrence or
+ * all of them based on rmode
+ */
+static int ki_replace_str_helper(sip_msg_t* msg, str* lbuf, str* mkey,
+			str* rval, str *rmode)
+{
+	sr_lump_t* l;
+	char* s;
+	str mbuf;
+	char *mp;
+	char rpos;
+
+	if(lbuf==NULL || mkey==NULL || rval==NULL) {
+		return -1;
+	}
+	if(lbuf->s==NULL || lbuf->len<=0 || mkey->s==NULL || mkey->len<=0) {
+		return 1;
+	}
+
+	if(rmode==NULL || rmode->s==NULL || rmode->s[0]=='f' || rmode->s[0]=='F') {
+		rpos = 'f';
+	} else {
+		rpos = 'a';
+	}
+
+	mbuf = *lbuf;
+
+	while((mp=textops_strfind(&mbuf, mkey))!=NULL) {
+
+		if ((l=del_lump(msg, mp - msg->buf, mkey->len, 0))==0) {
+			return -1;
+		}
+		s=pkg_malloc(rval->len+1);
+		if (s==0){
+			LM_ERR("memory allocation failure\n");
+			return -1;
+		}
+		memcpy(s, rval->s, rval->len);
+		if (insert_new_lump_after(l, s, rval->len, 0)==0){
+			LM_ERR("could not insert new lump\n");
+			pkg_free(s);
+			return -1;
+		}
+
+		if(rpos=='f') {
+			return 1;
+		}
+
+		mbuf.s = mp + mkey->len;
+		mbuf.len = msg->len - (mbuf.s - msg->buf);
+	}
+
+	return 1;
+}
+
+static int ki_replace_str(sip_msg_t* msg, str* mkey, str* rval, str *rmode)
+{
+	str lbuf;
+
+	lbuf.s = get_header(msg);
+	lbuf.len = msg->len - (lbuf.s - msg->buf);
+
+	return ki_replace_str_helper(msg, &lbuf, mkey, rval, rmode);
+}
+
+static int replace_str_f(sip_msg_t* msg, char* pmkey, char* prval, char* prmode)
+{
+	str mkey;
+	str rval;
+	str rmode;
+
+	if(fixup_get_svalue(msg, (gparam_t*)pmkey, &mkey)<0) {
+		LM_ERR("failed to get the matching string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prval, &rval)<0) {
+		LM_ERR("failed to get the replacement string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prmode, &rmode)<0) {
+		LM_ERR("failed to get the replacement mode parameter\n");
+		return -1;
+	}
+
+	return ki_replace_str(msg, &mkey, &rval, &rmode);
 }
 
 static int replace_body_helper(sip_msg_t* msg, regex_t *re, str *val)
@@ -851,6 +1142,173 @@ static int ki_replace_body(sip_msg_t* msg, str* sre, str* sval)
 	regfree(&mre);
 
 	return ret;
+}
+
+static int ki_replace_body_str(sip_msg_t* msg, str* mkey, str* rval, str *rmode)
+{
+	str lbuf;
+
+	lbuf.s = get_body(msg);
+	if (lbuf.s==0) {
+		LM_ERR("failed to get the message body\n");
+		return -1;
+	}
+	lbuf.len = msg->len - (int)(lbuf.s-msg->buf);
+	if (lbuf.len==0) {
+		LM_DBG("message body has zero length\n");
+		return -1;
+	}
+
+	return ki_replace_str_helper(msg, &lbuf, mkey, rval, rmode);
+}
+
+static int replace_body_str_f(sip_msg_t* msg, char* pmkey, char* prval, char* prmode)
+{
+	str mkey;
+	str rval;
+	str rmode;
+
+	if(fixup_get_svalue(msg, (gparam_t*)pmkey, &mkey)<0) {
+		LM_ERR("failed to get the matching string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prval, &rval)<0) {
+		LM_ERR("failed to get the replacement string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prmode, &rmode)<0) {
+		LM_ERR("failed to get the replacement mode parameter\n");
+		return -1;
+	}
+
+	return ki_replace_body_str(msg, &mkey, &rval, &rmode);
+}
+
+static int replace_hdrs_helper(sip_msg_t* msg, regex_t *re, str *val)
+{
+	struct lump* l;
+	regmatch_t pmatch;
+	char* s;
+	int off;
+	str lbuf;
+	char bk;
+
+	if ( parse_headers(msg, HDR_EOH_F, 0)==-1 ) {
+		LM_ERR("failed to parse to end of headers\n");
+		return -1;
+	}
+
+	lbuf.s = get_header(msg);
+	lbuf.len = (int)(msg->unparsed - lbuf.s);
+
+	if (lbuf.len==0) {
+		LM_DBG("message headers part has zero length\n");
+		return -1;
+	}
+
+	bk = lbuf.s[lbuf.len];
+	lbuf.s[lbuf.len] = '\0';
+	if (regexec(re, lbuf.s, 1, &pmatch, 0)!=0) {
+		lbuf.s[lbuf.len] = bk;
+		return -1;
+	}
+	lbuf.s[lbuf.len] = bk;
+
+	off=lbuf.s-msg->buf;
+
+	if (pmatch.rm_so!=-1){
+		if ((l=del_lump(msg, pmatch.rm_so+off,
+						pmatch.rm_eo-pmatch.rm_so, 0))==0)
+			return -1;
+		s=pkg_malloc(val->len+1);
+		if (s==0){
+			LM_ERR("memory allocation failure\n");
+			return -1;
+		}
+		memcpy(s, val->s, val->len);
+		if (insert_new_lump_after(l, s, val->len, 0)==0){
+			LM_ERR("could not insert new lump\n");
+			pkg_free(s);
+			return -1;
+		}
+
+		return 1;
+	}
+	return -1;
+}
+
+static int replace_hdrs_f(struct sip_msg* msg, char* key, char* str2)
+{
+	str val;
+
+	val.s = str2;
+	val.len = strlen(val.s);
+
+	return replace_hdrs_helper(msg, (regex_t*)key, &val);
+}
+
+static int ki_replace_hdrs(sip_msg_t* msg, str* sre, str* sval)
+{
+	regex_t mre;
+	int ret;
+
+	memset(&mre, 0, sizeof(regex_t));
+	if (regcomp(&mre, sre->s, REG_EXTENDED|REG_ICASE|REG_NEWLINE)!=0) {
+		LM_ERR("failed to compile regex: %.*s\n", sre->len, sre->s);
+		return -1;
+	}
+
+	ret = replace_hdrs_helper(msg, &mre, sval);
+
+	regfree(&mre);
+
+	return ret;
+}
+
+static int ki_replace_hdrs_str(sip_msg_t* msg, str* mkey, str* rval, str *rmode)
+{
+	str lbuf;
+
+	if ( parse_headers(msg, HDR_EOH_F, 0)==-1 ) {
+		LM_ERR("failed to parse to end of headers\n");
+		return -1;
+	}
+
+	lbuf.s = get_header(msg);
+	lbuf.len = (int)(msg->unparsed - lbuf.s);
+
+	if (lbuf.len==0) {
+		LM_DBG("message headers part has zero length\n");
+		return -1;
+	}
+
+	return ki_replace_str_helper(msg, &lbuf, mkey, rval, rmode);
+}
+
+static int replace_hdrs_str_f(sip_msg_t* msg, char* pmkey, char* prval, char* prmode)
+{
+	str mkey;
+	str rval;
+	str rmode;
+
+	if(fixup_get_svalue(msg, (gparam_t*)pmkey, &mkey)<0) {
+		LM_ERR("failed to get the matching string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prval, &rval)<0) {
+		LM_ERR("failed to get the replacement string parameter\n");
+		return -1;
+	}
+
+	if(fixup_get_svalue(msg, (gparam_t*)prmode, &rmode)<0) {
+		LM_ERR("failed to get the replacement mode parameter\n");
+		return -1;
+	}
+
+	return ki_replace_hdrs_str(msg, &mkey, &rval, &rmode);
 }
 
 /* sed-perl style re: s/regular expression/replacement/flags */
@@ -2473,7 +2931,7 @@ static int ki_remove_multibody(sip_msg_t* msg, str* content_type)
 	}
 
 	if(get_boundary(msg, &boundary)!=0) {
-		LM_ERR("Cannot get boundary. Is body multipart?\n");
+		LM_ERR("Cannot get boundary from Content type header. Is body multipart?\n");
 		return -1;
 	}
 
@@ -2563,18 +3021,23 @@ static int ki_get_body_part_helper(sip_msg_t* msg, str* ctype, pv_spec_t *dst,
 
 	body.s = get_body(msg);
 	if (body.s == 0) {
-		LM_ERR("failed to get the message body\n");
+		LM_ERR("failed to get the content message body\n");
 		return -1;
 	}
 	body.len = msg->len - (int)(body.s - msg->buf);
 	if (body.len == 0) {
-		LM_DBG("message body has zero length\n");
+		LM_DBG("Content body has zero length\n");
 		return -1;
 	}
 
 	if(get_boundary(msg, &boundary)!=0) {
-		LM_ERR("Cannot get boundary. Is body multipart?\n");
-		return -1;
+		LM_DBG("Content is not multipart so return all content body as string\n");
+		memset(&val, 0, sizeof(pv_value_t));
+		val.flags = PV_VAL_STR;
+		val.rs.s = body.s;
+		val.rs.len =body.len;
+		dst->setf(msg, &dst->pvp, (int)EQ_T, &val);
+		return 1;
 	}
 
 	start = body.s;
@@ -2680,7 +3143,7 @@ static int get_body_part_helper(sip_msg_t* msg, char* ctype, char* ovar, int mod
 	str content_type;
 
 	if(ctype==0) {
-		LM_ERR("invalid parameters\n");
+		LM_ERR("invalid Content-type parameters\n");
 		return -1;
 	}
 
@@ -3392,7 +3855,7 @@ int ki_in_list_prefix(sip_msg_t* _m, str* subject, str* list, str* vsep)
 {
 	int sep;
 	char *at, *past, *next_sep, *s;
-	
+
 	if(subject==NULL || subject->len<=0 || list==NULL || list->len<=0
 			|| vsep==NULL || vsep->len<=0)
 		return -1;
@@ -4243,6 +4706,11 @@ static sr_kemi_t sr_kemi_textops_exports[] = {
 		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
 			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
 	},
+	{ str_init("textops"), str_init("replace_str"),
+		SR_KEMIP_INT, ki_replace_str,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_STR,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
 	{ str_init("textops"), str_init("replace_all"),
 		SR_KEMIP_INT, ki_replace_all,
 		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
@@ -4251,6 +4719,21 @@ static sr_kemi_t sr_kemi_textops_exports[] = {
 	{ str_init("textops"), str_init("replace_body"),
 		SR_KEMIP_INT, ki_replace_body,
 		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("textops"), str_init("replace_body_str"),
+		SR_KEMIP_INT, ki_replace_body_str,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_STR,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("textops"), str_init("replace_hdrs"),
+		SR_KEMIP_INT, ki_replace_hdrs,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
+			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("textops"), str_init("replace_hdrs_str"),
+		SR_KEMIP_INT, ki_replace_hdrs_str,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_STR,
 			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
 	},
 	{ str_init("textops"), str_init("replace_body_all"),
@@ -4377,6 +4860,11 @@ static sr_kemi_t sr_kemi_textops_exports[] = {
 		SR_KEMIP_INT, ki_get_body_part_raw,
 		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_NONE,
 			SR_KEMIP_NONE, SR_KEMIP_NONE, SR_KEMIP_NONE }
+	},
+	{ str_init("textops"), str_init("regex_substring"),
+		SR_KEMIP_INT, ki_regex_substring,
+		{ SR_KEMIP_STR, SR_KEMIP_STR, SR_KEMIP_INT,
+			SR_KEMIP_INT, SR_KEMIP_STR, SR_KEMIP_NONE }
 	},
 
 	{ {0, 0}, {0, 0}, 0, NULL, { 0, 0, 0, 0, 0, 0 } }

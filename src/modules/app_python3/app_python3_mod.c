@@ -26,6 +26,7 @@
 #include "../../core/sr_module.h"
 #include "../../core/mod_fix.h"
 #include "../../core/kemi.h"
+#include "../../core/cfg/cfg_struct.h"
 
 #include "python_exec.h"
 #include "python_iface.h"
@@ -81,18 +82,16 @@ static cmd_export_t cmds[] = {
 
 /** module exports */
 struct module_exports exports = {
-	"app_python3",                   /* module name */
-	RTLD_NOW | RTLD_GLOBAL,         /* dlopen flags */
-	cmds,                           /* exported functions */
-	params,                         /* exported parameters */
-	0,                              /* exported statistics */
-	0,                              /* exported MI functions */
-	0,                              /* exported pseudo-variables */
-	0,                              /* extra processes */
-	mod_init,                       /* module initialization function */
-	(response_function) NULL,       /* response handling function */
-	(destroy_function) mod_destroy, /* destroy function */
-	child_init                      /* per-child init function */
+	"app_python3",           /* module name */
+	RTLD_NOW | RTLD_GLOBAL,  /* dlopen flags */
+	cmds,                    /* exported functions */
+	params,                  /* exported parameters */
+	0,                       /* exported rpc functions */
+	0,                       /* exported pseudo-variables */
+	0,                       /* response handling function */
+	mod_init,                /* module init function */
+	child_init,              /* per-child init function */
+	mod_destroy              /* destroy function */
 };
 
 
@@ -178,7 +177,14 @@ static int child_init(int rank)
 		return 0;
 	}
 	_apy_process_rank = rank;
+#if PY_VERSION_HEX >= 0x03070000
+	PyOS_AfterFork_Child();
+#else
 	PyOS_AfterFork();
+#endif
+	if (cfg_child_init()) {
+		return -1;
+	}
 	return apy_init_script(rank);
 }
 
@@ -429,7 +435,11 @@ int apy_init_script(int rank)
 {
 	PyObject *pFunc, *pArgs, *pValue, *pResult;
 	int rval = -1;
+#if PY_VERSION_HEX >= 0x03070000
+	const char *classname;
+#else
 	char *classname;
+#endif
 	PyGILState_STATE gstate;
 
 

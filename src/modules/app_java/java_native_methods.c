@@ -348,8 +348,7 @@ JNIEXPORT jint JNICALL Java_org_siprouter_NativeMethods_KamExec(
 
 int KamExec(JNIEnv *jenv, char *fname, int argc, char **argv)
 {
-	sr31_cmd_export_t *fexport;
-	unsigned mod_ver;
+	ksr_cmd_export_t *fexport;
 	int rval;
 	int mod_type;
 	struct action *act;
@@ -359,7 +358,7 @@ int KamExec(JNIEnv *jenv, char *fname, int argc, char **argv)
 	if(!_aj_msg)
 		return -1;
 
-	fexport = find_export_record(fname, argc, 0, &mod_ver);
+	fexport = find_export_record(fname, argc, 0);
 	if(!fexport) {
 		LM_ERR("%s: KamExec(): '%s' - no such function\n", APP_NAME, fname);
 		return -1;
@@ -996,17 +995,13 @@ JNIEXPORT jint JNICALL Java_org_siprouter_CoreMethods_force_1send_1socket(
 
 	nl = (struct name_lst *)pkg_malloc(sizeof(struct name_lst));
 	if(!nl) {
-		LM_ERR("%s: force_send_socket: pkg_malloc() has failed. Not enough "
-			   "memory!\n",
-				APP_NAME);
+		PKG_MEM_ERROR;
 		return -1;
 	}
 
 	si = (struct socket_id *)pkg_malloc(sizeof(struct socket_id));
 	if(!si) {
-		LM_ERR("%s: force_send_socket: pkg_malloc() has failed. Not enough "
-			   "memory!\n",
-				APP_NAME);
+		PKG_MEM_ERROR;
 		return -1;
 	}
 

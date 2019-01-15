@@ -138,18 +138,16 @@ static param_export_t params[] = {
  * Module interface
  */
 struct module_exports exports = {
-	"regex",                   /*!< module name */
-	DEFAULT_DLFLAGS,           /*!< dlopen flags */
-	cmds,                      /*!< exported functions */
-	params,                    /*!< exported parameters */
-	0,                         /*!< exported statistics */
-	0,                         /*!< exported MI functions */
-	0,                         /*!< exported pseudo-variables */
-	0,                         /*!< extra processes */
-	mod_init,                  /*!< module initialization function */
-	(response_function) 0,     /*!< response handling function */
-	destroy,                   /*!< destroy function */
-	0                          /*!< per-child init function */
+	"regex",         /*!< module name */
+	DEFAULT_DLFLAGS, /*!< dlopen flags */
+	cmds,            /*!< exported functions */
+	params,          /*!< exported parameters */
+	0,               /*!< exported RPC functions */
+	0,               /*!< exported pseudo-variables */
+	0,               /*!< response handling function */
+	mod_init,        /*!< module initialization function */
+	0,               /*!< per-child init function */
+	destroy          /*!< destroy function */
 };
 
 
@@ -638,7 +636,7 @@ static int ki_pcre_match_group(sip_msg_t* _msg, str* string, int num_pcre)
 static int w_pcre_match_group(struct sip_msg* _msg, char* _s1, char* _s2)
 {
 	str string, group;
-	unsigned int num_pcre;
+	unsigned int num_pcre = 0;
 
 	if (_s1 == NULL) {
 		LM_ERR("bad parameters\n");

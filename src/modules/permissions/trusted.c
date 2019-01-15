@@ -203,8 +203,9 @@ int init_trusted(void)
 		}
 
 		if(db_check_table_version(&perm_dbf, db_handle, &trusted_table, TABLE_VERSION) < 0) {
-			LM_ERR("error during table version check.\n");
+			DB_TABLE_VERSION_ERROR(trusted_table);
 			perm_dbf.close(db_handle);
+			db_handle = 0;
 			return -1;
 		}
 
@@ -272,7 +273,7 @@ int init_child_trusted(int rank)
 
 	if (db_check_table_version(&perm_dbf, db_handle, &trusted_table,
 				TABLE_VERSION) < 0) {
-		LM_ERR("error during table version check.\n");
+		DB_TABLE_VERSION_ERROR(trusted_table);
 		perm_dbf.close(db_handle);
 		return -1;
 	}
@@ -354,16 +355,15 @@ static inline int match_proto(const char *proto_string, int proto_int)
 
 	return 0;
 }
-
 /*
  * Matches from uri against patterns returned from database.  Returns number
  * of matches or -1 if none of the patterns match.
  */
-static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
+static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r, char* uri)
 {
 	int i, tag_avp_type;
-	str uri, ruri;
-	char uri_string[MAX_URI_SIZE+1];
+	str ruri;
+
 	char ruri_string[MAX_URI_SIZE+1];
 	db_row_t* row;
 	db_val_t* val;
@@ -372,14 +372,6 @@ static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
 	int count = 0;
 
 	if (IS_SIP(msg)) {
-		if (parse_from_header(msg) < 0) return -1;
-		uri = get_from(msg)->uri;
-		if (uri.len > MAX_URI_SIZE) {
-			LM_ERR("message has From URI too large\n");
-			return -1;
-		}
-		memcpy(uri_string, uri.s, uri.len);
-		uri_string[uri.len] = (char)0;
 		ruri = msg->first_line.u.request.uri;
 		if (ruri.len > MAX_URI_SIZE) {
 			LM_ERR("message has Request URI too large\n");
@@ -391,6 +383,8 @@ static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
 	get_tag_avp(&tag_avp, &tag_avp_type);
 
 	row = RES_ROWS(_r);
+
+	LM_DBG("match_res: row numbers %d\n",  RES_ROW_N(_r));
 
 	for(i = 0; i < RES_ROW_N(_r); i++) {
 		val = ROW_VALUES(row + i);
@@ -404,6 +398,8 @@ static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
 				(VAL_NULL(val + 3) ||
 				((VAL_TYPE(val + 3) == DB1_STRING) && !VAL_NULL(val + 3))))
 		{
+			LM_DBG("match_res: %s, %s, %s, %s\n", VAL_STRING(val), VAL_STRING(val + 1), VAL_STRING(val + 2), VAL_STRING(val + 3));
+
 			if (IS_SIP(msg)) {
 				if (!VAL_NULL(val + 1)) {
 					if (regcomp(&preg, (char *)VAL_STRING(val + 1), REG_NOSUB)) {
@@ -412,7 +408,7 @@ static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
 							continue;
 						}
 					}
-					if (regexec(&preg, uri_string, 0, (regmatch_t *)0, 0)) {
+					if (regexec(&preg, uri, 0, (regmatch_t *)0, 0)) {
 						regfree(&preg);
 						continue;
 					}
@@ -444,19 +440,18 @@ static int match_res(struct sip_msg* msg, int proto, db1_res_t* _r)
 			count++;
 		}
 	}
-	if (!count)
-		return -1;
-	else
-		return count;
-}
 
+	return (count == 0 ? -1 : count);
+}
 
 /*
  * Checks based on given source IP address and protocol, and From URI
  * of request if request can be trusted without authentication.
  */
-int allow_trusted(struct sip_msg* msg, char *src_ip, int proto)
+int allow_trusted(struct sip_msg* msg, char *src_ip, int proto, char *from_uri)
 {
+	LM_DBG("allow_trusted src_ip: %s, proto: %d, from_uri: %s\n",
+			src_ip, proto, from_uri);
 	int result;
 	db1_res_t* res = NULL;
 
@@ -498,11 +493,11 @@ int allow_trusted(struct sip_msg* msg, char *src_ip, int proto)
 			return -1;
 		}
 
-		result = match_res(msg, proto, res);
+		result = match_res(msg, proto, res, from_uri);
 		perm_dbf.free_result(db_handle, res);
 		return result;
 	} else {
-		return match_hash_table(*hash_table, msg, src_ip, proto);
+		return match_hash_table(*hash_table, msg, src_ip, proto, from_uri);
 	}
 }
 
@@ -513,16 +508,33 @@ int allow_trusted(struct sip_msg* msg, char *src_ip, int proto)
  */
 int allow_trusted_0(struct sip_msg* _msg, char* str1, char* str2)
 {
-	return allow_trusted(_msg, ip_addr2a(&(_msg->rcv.src_ip)),
-			_msg->rcv.proto);
-}
+	str furi;
+	char furi_string[MAX_URI_SIZE+1];
 
+	if (IS_SIP(_msg)) {
+		if (parse_from_header(_msg) < 0) return -1;
+		furi = get_from(_msg)->uri;
+		if (furi.len > MAX_URI_SIZE) {
+			LM_ERR("message has From URI too large\n");
+			return -1;
+		}
+
+		memcpy(furi_string, furi.s, furi.len);
+		furi_string[furi.len] = (char)0;
+	} else {
+		furi_string[0] = '\0';
+	}
+
+	return allow_trusted(_msg, ip_addr2a(&(_msg->rcv.src_ip)), _msg->rcv.proto,
+			furi_string);
+}
 
 /*
  * Checks based on source address and protocol given in pvar arguments and
- * and requests's From URI, if request can be trusted without authentication.
+ * provided uri, if request can be trusted without authentication.
  */
-int allow_trusted_2(struct sip_msg* _msg, char* _src_ip_sp, char* _proto_sp)
+int allow_trusted_furi(struct sip_msg* _msg, char* _src_ip_sp,
+		char* _proto_sp, char *from_uri)
 {
 	str src_ip, proto;
 	int proto_int;
@@ -576,15 +588,60 @@ int allow_trusted_2(struct sip_msg* _msg, char* _src_ip_sp, char* _proto_sp)
 			goto error;
 	}
 
-	return allow_trusted(_msg, src_ip.s, proto_int);
+	return allow_trusted(_msg, src_ip.s, proto_int, from_uri);
 error:
 	LM_ERR("unknown protocol %.*s\n", proto.len, proto.s);
 	return -1;
 }
 
+/*
+ * Checks based on source address and protocol given in pvar arguments and
+ * and requests's From URI, if request can be trusted without authentication.
+ */
+int allow_trusted_2(struct sip_msg* _msg, char* _src_ip_sp, char* _proto_sp)
+{
+	str uri;
+	char uri_string[MAX_URI_SIZE+1];
+
+	if (IS_SIP(_msg)) {
+		if (parse_from_header(_msg) < 0) return -1;
+		uri = get_from(_msg)->uri;
+		if (uri.len > MAX_URI_SIZE) {
+			LM_ERR("message has From URI too large\n");
+			return -1;
+		}
+
+		memcpy(uri_string, uri.s, uri.len);
+		uri_string[uri.len] = (char)0;
+	}
+
+	return allow_trusted_furi(_msg, _src_ip_sp, _proto_sp, uri_string);
+}
+
+/*
+ * Checks based on source address and protocol given in pvar arguments and
+ * and requests's From URI, if request can be trusted without authentication.
+ */
+int allow_trusted_3(struct sip_msg* _msg, char* _src_ip_sp, char* _proto_sp,
+		char *_from_uri)
+{
+	str from_uri;
+	if (_from_uri==NULL
+			|| (fixup_get_svalue(_msg, (gparam_p)_from_uri, &from_uri) != 0)) {
+		LM_ERR("uri param does not exist or has no value\n");
+		return -1;
+	}
+
+	return allow_trusted_furi(_msg, _src_ip_sp, _proto_sp, from_uri.s);
+}
 
 int reload_trusted_table_cmd(void)
 {
+	if(!db_url.s) {
+		LM_ERR("db_url not set\n");
+		return -1;
+	}
+
 	if (!db_handle) {
 		db_handle = perm_dbf.init(&db_url);
 		if (!db_handle) {

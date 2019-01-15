@@ -114,14 +114,12 @@ struct module_exports exports= {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,       /* exported functions */
 	params,     /* exported params */
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
+	0,          /* exported RPC methods */
 	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	mod_init,   /* initialization module */
 	0,          /* response function */
-	destroy,    /* destroy function */
-	child_init  /* per-child init function */
+	mod_init,   /* initialization module */
+	child_init, /* per-child init function */
+	destroy    /* destroy function */
 };
 
 
@@ -145,9 +143,9 @@ static int mod_init( void )
 	memset(&_acc_diameter_engine, 0, sizeof(acc_engine_t));
 
 	if(diameter_flag != -1)
-		_acc_diameter_engine.acc_flag	   = 1<<diameter_flag;
+		_acc_diameter_engine.acc_flag	   = diameter_flag;
 	if(diameter_missed_flag != -1)
-		_acc_diameter_engine.missed_flag = 1<<diameter_missed_flag;
+		_acc_diameter_engine.missed_flag = diameter_missed_flag;
 	_acc_diameter_engine.acc_req     = acc_diameter_send_request;
 	_acc_diameter_engine.acc_init    = acc_diameter_init;
 	memcpy(_acc_diameter_engine.name, "diameter", 8);
@@ -182,7 +180,7 @@ static int child_init(int rank)
 	rb = (rd_buf_t*)pkg_malloc(sizeof(rd_buf_t));
 	if(!rb)
 	{
-		LM_DBG("no more pkg memory\n");
+		PKG_MEM_ERROR;
 		return -1;
 	}
 	rb->buf = 0;
@@ -225,7 +223,7 @@ static int acc_api_fixup(void** param, int param_no)
 	if (param_no == 1) {
 		accp = (struct acc_param*)pkg_malloc(sizeof(struct acc_param));
 		if (!accp) {
-			LM_ERR("no more pkg mem\n");
+			PKG_MEM_ERROR;
 			return E_OUT_OF_MEM;
 		}
 		memset( accp, 0, sizeof(struct acc_param));
@@ -546,7 +544,7 @@ int extra2strar(struct acc_extra *extra, sip_msg_t *rq, str *val_arr,
 		} else {
 			val_arr[n].s = (char *)pkg_malloc(value.rs.len);
 			if (val_arr[n].s == NULL ) {
-				LM_ERR("out of memory.\n");
+				PKG_MEM_ERROR;
 				/* Cleanup already allocated memory and
 				 * return that we didn't do anything */
 				for (i = 0; i < n ; i++) {

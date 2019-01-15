@@ -44,7 +44,7 @@
  * reload enabled param
  * default: 0 (off)
  */
-static unsigned int _app_lua_sr_reload = 0;
+static unsigned int _app_lua_sr_reload = 1;
 /**
  *
  */
@@ -81,14 +81,14 @@ int lua_sr_alloc_script_ver(void)
 	sr_lua_script_ver = (sr_lua_script_ver_t *) shm_malloc(sizeof(sr_lua_script_ver_t));
 	if(sr_lua_script_ver==NULL)
 	{
-		LM_ERR("cannot allocate shm memory\n");
+		SHM_MEM_ERROR;
 		return -1;
 	}
 
 	sr_lua_script_ver->version = (unsigned int *) shm_malloc(sizeof(unsigned int)*size);
 	if(sr_lua_script_ver->version==NULL)
 	{
-		LM_ERR("cannot allocate shm memory\n");
+		SHM_MEM_ERROR;
 		goto error;
 	}
 	memset(sr_lua_script_ver->version, 0, sizeof(unsigned int)*size);
@@ -136,7 +136,7 @@ int sr_lua_load_script(char *script)
 	li = (sr_lua_load_t*)pkg_malloc(sizeof(sr_lua_load_t));
 	if(li==NULL)
 	{
-		LM_ERR("no more pkg\n");
+		PKG_MEM_ERROR;
 		return -1;
 	}
 	memset(li, 0, sizeof(sr_lua_load_t));
@@ -297,8 +297,8 @@ int lua_sr_init_child(void)
 
 		/* set SR lib version */
 #if LUA_VERSION_NUM >= 502
-		lua_pushstring(_sr_L_env.L, SRVERSION);
-		lua_setglobal(_sr_L_env.L, "SRVERSION");
+		lua_pushstring(_sr_L_env.LL, SRVERSION);
+		lua_setglobal(_sr_L_env.LL, "SRVERSION");
 #else
 		lua_pushstring(_sr_L_env.LL, "SRVERSION");
 		lua_pushstring(_sr_L_env.LL, SRVERSION);
@@ -451,7 +451,7 @@ int sr_lua_reload_script(void)
 		_app_lua_sv = (int *) pkg_malloc(sizeof(int)*sv_len);
 		if(_app_lua_sv==NULL)
 		{
-			LM_ERR("no more pkg memory\n");
+			PKG_MEM_ERROR;
 			return -1;
 		}
 	}
@@ -646,6 +646,7 @@ int app_lua_run_ex(sip_msg_t *msg, char *func, char *p1, char *p2,
 	int ret;
 	str txt;
 	sip_msg_t *bmsg;
+	int ltop;
 
 	if(_sr_L_env.LL==NULL)
 	{
@@ -663,7 +664,8 @@ int app_lua_run_ex(sip_msg_t *msg, char *func, char *p1, char *p2,
 	}
 	else LM_DBG("reload deactivated\n");
 	LM_DBG("executing Lua function: [[%s]]\n", func);
-	LM_DBG("lua top index is: %d\n", lua_gettop(_sr_L_env.LL));
+	ltop = lua_gettop(_sr_L_env.LL);
+	LM_DBG("lua top index is: %d\n", ltop);
 	lua_getglobal(_sr_L_env.LL, func);
 	if(!lua_isfunction(_sr_L_env.LL, -1))
 	{
@@ -674,8 +676,12 @@ int app_lua_run_ex(sip_msg_t *msg, char *func, char *p1, char *p2,
 				lua_typename(_sr_L_env.LL,lua_type(_sr_L_env.LL, -1)));
 			txt.s = (char*)lua_tostring(_sr_L_env.LL, -1);
 			LM_ERR("error from Lua: %s\n", (txt.s)?txt.s:"unknown");
+			/* restores the original stack size */
+			lua_settop(_sr_L_env.LL, ltop);
 			return -1;
 		} else {
+			/* restores the original stack size */
+			lua_settop(_sr_L_env.LL, ltop);
 			return 1;
 		}
 	}
@@ -721,12 +727,19 @@ int app_lua_run_ex(sip_msg_t *msg, char *func, char *p1, char *p2,
 		}
 		lua_pop(_sr_L_env.LL, 1);
 		if(n==1) {
+			/* restores the original stack size */
+			lua_settop(_sr_L_env.LL, ltop);
 			return 1;
 		} else {
 			LM_ERR("error executing: %s (err: %d)\n", func, ret);
+			/* restores the original stack size */
+			lua_settop(_sr_L_env.LL, ltop);
 			return -1;
 		}
 	}
+
+	/* restores the original stack size */
+	lua_settop(_sr_L_env.LL, ltop);
 
 	return 1;
 }

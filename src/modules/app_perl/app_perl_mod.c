@@ -149,14 +149,12 @@ struct module_exports _app_perl_exports = {
 	RTLD_NOW | RTLD_GLOBAL,
 	cmds,       /* Exported functions */
 	params,     /* Exported parameters */
-	0,          /* exported statistics */
-	0,          /* exported MI functions */
+	0,          /* exported RPC methods */
 	0,          /* exported pseudo-variables */
-	0,          /* extra processes */
-	mod_init,   /* module initialization function */
 	0,          /* response function */
-	destroy,    /* destroy function */
-	0           /* child initialization function */
+	mod_init,   /* module initialization function */
+	0,          /* child initialization function */
+	destroy    /* destroy function */
 };
 
 
@@ -219,7 +217,7 @@ PerlInterpreter *parser_init(void) {
 					LM_INFO("setting lib path: '%s'\n", entry);
 					argv[argc] = pkg_malloc(strlen(entry)+20);
 					if (!argv[argc]) {
-						LM_ERR("not enough pkg mem\n");
+						PKG_MEM_ERROR;
 						return NULL;
 					}
 					sprintf(argv[argc], "-I%s", entry);
@@ -331,7 +329,7 @@ static int mod_init(void) {
 
 	_ap_reset_cycles = shm_malloc(sizeof(int));
 	if(_ap_reset_cycles == NULL) {
-		LM_ERR("no more shared memory\n");
+		SHM_MEM_ERROR;
 		return -1;
 	}
 	*_ap_reset_cycles = _ap_reset_cycles_init;

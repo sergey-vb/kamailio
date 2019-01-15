@@ -28,6 +28,7 @@
 #include "../../core/sr_module.h"
 #include "../../core/dprint.h"
 #include "../../core/ut.h"
+#include "../../core/fmsg.h"
 #include "../../core/pvar.h"
 #include "../../core/timer_proc.h"
 #include "../../core/route_struct.h"
@@ -76,14 +77,12 @@ struct module_exports exports = {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,
 	params,
-	0,
-	0,              /* exported MI functions */
+	0,              /* exported RPC methods */
 	0,              /* exported pseudo-variables */
-	0,              /* extra processes */
-	mod_init,       /* module initialization function */
 	0,              /* response function */
-	mod_destroy,    /* destroy function */
-	child_init      /* per child init function */
+	mod_init,       /* module initialization function */
+	child_init,     /* per child init function */
+	mod_destroy    	/* destroy function */
 };
 /* clang-format on */
 
@@ -155,6 +154,11 @@ static int w_async_sleep(sip_msg_t *msg, char *sec, char *str2)
 	if(msg == NULL)
 		return -1;
 
+	if(faked_msg_match(msg)) {
+		LM_ERR("invalid usage for faked message\n");
+		return -1;
+	}
+
 	if(async_workers <= 0) {
 		LM_ERR("no async mod timer workers (modparam missing?)\n");
 		return -1;
@@ -211,6 +215,11 @@ int ki_async_route(sip_msg_t *msg, str *rn, int s)
 	cfg_action_t *act = NULL;
 	int ri;
 	sr_kemi_eng_t *keng = NULL;
+
+	if(faked_msg_match(msg)) {
+		LM_ERR("invalid usage for faked message\n");
+		return -1;
+	}
 
 	keng = sr_kemi_eng_get();
 	if(keng == NULL) {
@@ -286,6 +295,11 @@ int ki_async_task_route(sip_msg_t *msg, str *rn)
 	cfg_action_t *act = NULL;
 	int ri;
 	sr_kemi_eng_t *keng = NULL;
+
+	if(faked_msg_match(msg)) {
+		LM_ERR("invalid usage for faked message\n");
+		return -1;
+	}
 
 	keng = sr_kemi_eng_get();
 	if(keng == NULL) {

@@ -103,7 +103,7 @@ err:
     return -1;
 }
 
-redis_key_t * db_redis_key_unshift(redis_key_t **list) {
+redis_key_t * db_redis_key_shift(redis_key_t **list) {
     redis_key_t *k;
 
     k = *list;
@@ -294,7 +294,9 @@ void db_redis_free_tables(km_redis_con_t *con) {
     struct str_hash_table *ht;
     struct str_hash_table *col_ht;
     struct str_hash_entry *he;
+    struct str_hash_entry *he_b;
     struct str_hash_entry *col_he;
+    struct str_hash_entry *col_he_b;
     struct str_hash_entry *last;
     struct str_hash_entry *col_last;
     redis_table_t *table;
@@ -305,13 +307,13 @@ void db_redis_free_tables(km_redis_con_t *con) {
     ht = &con->tables;
     for (i = 0; i < ht->size; ++i) {
         last = (&ht->table[i])->prev;
-        clist_foreach(&ht->table[i], he, next) {
+        clist_foreach_safe(&ht->table[i], he, he_b, next) {
             table = (redis_table_t*) he->u.p;
 
             col_ht = &table->columns;
             for (j = 0; j < col_ht->size; ++j) {
                 col_last = (&col_ht->table[j])->prev;
-                clist_foreach(&col_ht->table[j], col_he, next) {
+                clist_foreach_safe(&col_ht->table[j], col_he, col_he_b, next) {
                     pkg_free(col_he->key.s);
                     if (col_he == col_last) {
                         pkg_free(col_he);
@@ -448,6 +450,15 @@ static struct str_hash_entry* db_redis_create_column(str *col, str *type) {
         case 'I':
             e->u.n = DB1_INT;
             break;
+        case 'u':
+        case 'U':
+			/* uint and ubigint */
+			if(type->len>1 && (type->s[1]=='b' || type->s[1]=='B')) {
+				e->u.n = DB1_UBIGINT;
+			} else {
+				e->u.n = DB1_UINT;
+			}
+            break;
         case 't':
         case 'T':
             e->u.n = DB1_DATETIME;
@@ -458,7 +469,12 @@ static struct str_hash_entry* db_redis_create_column(str *col, str *type) {
             break;
         case 'b':
         case 'B':
-            e->u.n = DB1_BLOB;
+			/* blob and bigint */
+			if(type->len>1 && (type->s[1]=='i' || type->s[1]=='I')) {
+				e->u.n = DB1_BIGINT;
+			} else {
+				e->u.n = DB1_BLOB;
+			}
             break;
         default:
             LM_ERR("Invalid schema column type '%.*s', expecting one of string, int, timestamp, double, blob\n",

@@ -215,9 +215,8 @@ int moduleFunc(struct sip_msg *m, char *func,
 	       char *param1, char *param2,
 	       int *retval) {
 
-	sr31_cmd_export_t* exp_func_struct;
+	ksr_cmd_export_t* exp_func_struct;
 	struct action *act;
-	unsigned mod_ver;
 	char *argv[2];
 	int argc = 0;
 	struct run_act_ctx ra_ctx;
@@ -237,7 +236,7 @@ int moduleFunc(struct sip_msg *m, char *func,
 	if (param1) {
 		argv[0] = (char *)pkg_malloc(strlen(param1)+1);
 		if (!argv[0]) {
-			LM_ERR("not enough pkg mem\n");
+			PKG_MEM_ERROR;
 			return -1;
 		}
 		strcpy(argv[0], param1);
@@ -249,7 +248,7 @@ int moduleFunc(struct sip_msg *m, char *func,
 	if (param2) {
 		argv[1] = (char *)pkg_malloc(strlen(param2)+1);
 		if (!argv[1]) {
-			LM_ERR("not enough pkg mem\n");
+			PKG_MEM_ERROR;
 			if (argv[0]) pkg_free(argv[0]);
 			return -1;
 		}
@@ -259,8 +258,8 @@ int moduleFunc(struct sip_msg *m, char *func,
 		argv[1] = NULL;
 	}
 
-	exp_func_struct = find_export_record(func, argc, 0, &mod_ver);
-	if (!exp_func_struct || mod_ver < 1) {
+	exp_func_struct = find_export_record(func, argc, 0);
+	if (!exp_func_struct) {
 		LM_ERR("function '%s' called, but not available.", func);
 		*retval = -1;
 		if (argv[0]) pkg_free(argv[0]);

@@ -190,25 +190,22 @@ static pv_export_t mod_items[] = {
 
 
 struct module_exports exports = {
-	"cfgutils",
+	"cfgutils",          /* module name */
 	DEFAULT_DLFLAGS, /* dlopen flags */
-	cmds,        /* exported functions */
-	params,      /* exported parameters */
-	0,           /* exported statistics */
-	0,           /* exported MI functions */
-	mod_items,   /* exported pseudo-variables */
-	0,           /* extra processes */
-	mod_init,    /* module initialization function */
-	0,           /* response function*/
-	mod_destroy, /* destroy function */
-	0            /* per-child init function */
+	cmds,            /* cmd (cfg function) exports */
+	params,          /* param exports */
+	0,               /* RPC method exports */
+	mod_items,       /* pseudo-variables exports */
+	0,               /* response handling function */
+	mod_init,        /* module init function */
+	0,               /* per-child init function */
+	mod_destroy      /* module destroy function */
 };
-
 
 /**************************** fixup functions ******************************/
 static int fixup_prob( void** param, int param_no)
 {
-	unsigned int myint;
+	unsigned int myint = 1000; /* stop if str2int later fail */
 	str param_str;
 
 	/* we only fix the parameter #1 */
@@ -705,7 +702,8 @@ static int cfg_lock_helper(str *lkey, int mode)
 	unsigned int pos;
 
 	if(_cfg_lock_set==NULL) {
-		LM_ERR("lock set not initialized (attempt to do op: %d on: %.*s)\n",
+		LM_ERR("lock set not initialized (attempt to do op: %d on: %.*s) -"
+				" see param lock_set_size\n",
 				mode, lkey->len, lkey->s);
 		return -1;
 	}
@@ -801,11 +799,10 @@ static int w_check_route_exists(struct sip_msg *msg, char *route)
 static int w_route_exists(struct sip_msg *msg, char *route)
 {
 	struct run_act_ctx ctx;
-	int newroute, backup_rt, ret;
+	int newroute, ret;
 	str s;
 
-	if (fixup_get_svalue(msg, (gparam_p) route, &s) != 0)
-	{
+	if (fixup_get_svalue(msg, (gparam_p) route, &s) != 0) {
 			LM_ERR("invalid route parameter\n");
 			return -1;
 	}
@@ -814,12 +811,8 @@ static int w_route_exists(struct sip_msg *msg, char *route)
 	if (newroute<0) {
 		return -1;
 	}
-	backup_rt = get_route_type();
-	set_route_type(REQUEST_ROUTE);
-
 	init_run_actions_ctx(&ctx);
-	ret = run_top_route(main_rt.rlist[newroute], msg, &ctx);
-	set_route_type(backup_rt);
+	ret=run_actions(&ctx, main_rt.rlist[newroute], msg);
 	if (ctx.run_flags & EXIT_R_F) {
 		return 0;
 	}
@@ -905,6 +898,7 @@ static void mod_destroy(void)
 	{
 		lock_set_destroy(_cfg_lock_set);
 		lock_set_dealloc(_cfg_lock_set);
+		_cfg_lock_set = NULL;
 	}
 }
 

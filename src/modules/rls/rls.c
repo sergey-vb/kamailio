@@ -254,18 +254,16 @@ static param_export_t params[]={
 
 /** module exports */
 struct module_exports exports= {
-	"rls",  			/* module name */
-	DEFAULT_DLFLAGS,		/* dlopen flags */
-	cmds,				/* exported functions */
-	params,				/* exported parameters */
-	0,				/* exported statistics */
-	0,     			/* exported MI functions */
-	0,				/* exported pseudo-variables */
-	0,				/* extra processes */
-	mod_init,			/* module initialization function */
-	0,				/* response handling function */
-	(destroy_function) destroy,	/* destroy function */
-	child_init			/* per-child init function */
+	"rls",           /* module name */
+	DEFAULT_DLFLAGS, /* dlopen flags */
+	cmds,            /* exported functions */
+	params,          /* exported parameters */
+	0,               /* exported RPC functions */
+	0,               /* exported pseudo-variables */
+	0,               /* response handling function */
+	mod_init,        /* module initialization function */
+	child_init,      /* per-child init function */
+	destroy          /* destroy function */
 };
 
 /**
@@ -485,21 +483,21 @@ static int mod_init(void)
 
 	/* verify table version */
 	if(db_check_table_version(&rls_dbf, rls_db, &rlsubs_table, W_TABLE_VERSION) < 0) {
-		LM_ERR("error during table version check.\n");
-		return -1;
+		DB_TABLE_VERSION_ERROR(rlsubs_table);
+		goto dberror;
 	}
 
 	/* verify table version */
 	if(db_check_table_version(&rlpres_dbf, rlpres_db, &rlpres_table, P_TABLE_VERSION) < 0) {
-		LM_ERR("error during table version check.\n");
-		return -1;
+		DB_TABLE_VERSION_ERROR(rlpres_table);
+		goto dberror;
 	}
 
 	/* verify table version */
 	if(db_check_table_version(&rls_xcap_dbf, rls_xcap_db, &rls_xcap_table, X_TABLE_VERSION) < 0)
 	{
-		LM_ERR("error during table version check.\n");
-		return -1;
+		DB_TABLE_VERSION_ERROR(rls_xcap_table);
+		goto dberror;
 	}
 
 	if (dbmode != RLS_DB_ONLY)
@@ -513,14 +511,14 @@ static int mod_init(void)
 		if(rls_table== NULL)
 		{
 			LM_ERR("while creating new hash table\n");
-			return -1;
+			goto dberror;
 		}
 		if(rls_reload_db_subs!=0)
 		{
 			if(rls_restore_db_subs()< 0)
 			{
 				LM_ERR("while restoring rl watchers table\n");
-				return -1;
+				goto dberror;
 			}
 		}
 	}
@@ -661,6 +659,15 @@ static int mod_init(void)
 	}
 
 	return 0;
+
+dberror:
+	rls_dbf.close(rls_db);
+	rls_db = NULL;
+	rlpres_dbf.close(rlpres_db);
+	rlpres_db = NULL;
+	rls_xcap_dbf.close(rls_xcap_db);
+	rls_xcap_db = NULL;
+	return -1;
 }
 
 /**

@@ -130,8 +130,6 @@ int dlg_h_id_step = 1;
 
 /* statistic variables */
 int dlg_enable_stats = 1;
-int active_dlgs_cnt = 0;
-int early_dlgs_cnt = 0;
 int detect_spirals = 1;
 int dlg_send_bye = 0;
 int dlg_timeout_noreset = 0;
@@ -360,14 +358,12 @@ struct module_exports exports= {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	cmds,            /* exported functions */
 	mod_params,      /* param exports */
-	mod_stats,       /* exported statistics */
-	0,               /* exported MI functions */
+	0,               /* exported RPC methods */
 	mod_items,       /* exported pseudo-variables */
-	0,               /* extra processes */
-	mod_init,        /* module initialization function */
 	0,               /* reply processing function */
-	mod_destroy,
-	child_init       /* per-child init function */
+	mod_init,        /* module initialization function */
+	child_init,      /* per-child init function */
+	mod_destroy
 };
 
 
@@ -501,7 +497,7 @@ static int mod_init(void)
 
 #ifdef STATISTICS
 	/* register statistics */
-	if (register_module_stats( exports.name, mod_stats)!=0 ) {
+	if (dlg_enable_stats && (register_module_stats( exports.name, mod_stats)!=0 )) {
 		LM_ERR("failed to register %s statistics\n", exports.name);
 		return -1;
 	}
@@ -519,8 +515,8 @@ static int mod_init(void)
 		return -1;
 
 	/* param checkings */
-	if (dlg_flag>MAX_FLAG) {
-		LM_ERR("invalid dlg flag %d!!\n",dlg_flag);
+	if (dlg_flag!=-1 && dlg_flag>MAX_FLAG) {
+		LM_ERR("invalid dlg flag %d!!\n", dlg_flag);
 		return -1;
 	}
 
@@ -580,10 +576,6 @@ static int mod_init(void)
 				dlg_timeout_noreset);
 		return -1;
 	}
-
-	/* if statistics are disabled, prevent their registration to core */
-	if (dlg_enable_stats==0)
-		exports.stats = 0;
 
 	/* create profile hashes */
 	if (add_profile_definitions( profiles_nv_s, 0)!=0 ) {
@@ -713,7 +705,6 @@ static int mod_init(void)
 			LM_ERR("failed to initialize the DB support\n");
 			return -1;
 		}
-		run_load_callbacks();
 	}
 
 	destroy_dlg_callbacks( DLGCB_LOADED );
@@ -744,6 +735,13 @@ static int child_init(int rank)
 {
 	dlg_db_mode = dlg_db_mode_param;
 
+
+	if(rank==PROC_INIT) {
+		if (dlg_db_mode!=DB_MODE_NONE) {
+			run_load_callbacks();
+		}
+	}
+
 	if(rank==PROC_MAIN) {
 		if(dlg_timer_procs>0) {
 			if(fork_sync_timer(PROC_TIMER, "Dialog Main Timer", 1 /*socks flag*/,
@@ -766,11 +764,6 @@ static int child_init(int rank)
 			LM_ERR("failed to start clean timer routine as process\n");
 			return -1; /* error */
 		}
-	}
-
-	if (rank==1) {
-		if_update_stat(dlg_enable_stats, active_dlgs, active_dlgs_cnt);
-		if_update_stat(dlg_enable_stats, early_dlgs, early_dlgs_cnt);
 	}
 
 	if ( ((dlg_db_mode==DB_MODE_REALTIME || dlg_db_mode==DB_MODE_DELAYED) &&
@@ -2203,6 +2196,12 @@ static const char *rpc_print_dlgs_doc[2] = {
 static const char *rpc_print_dlgs_ctx_doc[2] = {
 	"Print all dialogs with associated context", 0
 };
+static const char *rpc_dlg_list_match_doc[2] = {
+	"Print matching dialogs", 0
+};
+static const char *rpc_dlg_list_match_ctx_doc[2] = {
+	"Print matching dialogs with associated context", 0
+};
 static const char *rpc_print_dlg_doc[2] = {
 	"Print dialog based on callid and optionally fromtag", 0
 };
@@ -2222,8 +2221,11 @@ static const char *rpc_profile_print_dlgs_doc[2] = {
 	"Lists all the dialogs belonging to a profile", 0
 };
 static const char *rpc_dlg_bridge_doc[2] = {
-	"Bridge two SIP addresses in a call using INVITE(hold)-REFER-BYE mechanism:\
- to, from, [outbound SIP proxy]", 0
+	"Bridge two SIP addresses in a call using INVITE(hold)-REFER-BYE mechanism:"
+		" to, from, [outbound SIP proxy]", 0
+};
+static const char *rpc_dlg_is_alive_doc[2] = {
+	"Check whether dialog is alive or not", 0
 };
 
 
@@ -2279,6 +2281,40 @@ static void rpc_dlg_terminate_dlg(rpc_t *rpc,void *c){
     }
 }
 
+static void rpc_dlg_is_alive(rpc_t *rpc, void *c)
+{
+	str callid = {NULL, 0};
+	str ftag = {NULL, 0};
+	str ttag = {NULL, 0};
+
+	dlg_cell_t *dlg = NULL;
+	unsigned int dir = 0;
+	unsigned int state = 0;
+
+	if (rpc->scan(c, ".S.S.S", &callid, &ftag, &ttag) < 3) {
+		LM_DBG("Unable to read expected parameters\n");
+		rpc->fault(c, 400, "Too few parameters (required callid, from-tag, to-tag)");
+		return;
+	}
+
+	dlg = get_dlg(&callid, &ftag, &ttag, &dir);
+
+	if (dlg == NULL) {
+		LM_DBG("Couldnt find dialog with callid: '%.*s'\n", callid.len, callid.s);
+		rpc->fault(c, 404, "Dialog not found");
+		return;
+	}
+	state = dlg->state;
+    dlg_release(dlg);
+	if (state != DLG_STATE_CONFIRMED) {
+		LM_DBG("Dialog with Call-ID '%.*s' is in state: %d (confirmed: %d)\n",
+				callid.len, callid.s, state, DLG_STATE_CONFIRMED);
+		rpc->fault(c, 500, "Dialog not in confirmed state");
+		return;
+	} else {
+		rpc->add(c, "s", "Alive");
+	}
+}
 
 static void rpc_end_dlg_entry_id(rpc_t *rpc, void *c) {
 	unsigned int h_entry, h_id;
@@ -2331,6 +2367,7 @@ static void rpc_profile_print_dlgs(rpc_t *rpc, void *c) {
 	}
 	return;
 }
+
 static void rpc_dlg_bridge(rpc_t *rpc, void *c) {
 	str from = {NULL,0};
 	str to = {NULL,0};
@@ -2355,15 +2392,233 @@ static void rpc_dlg_bridge(rpc_t *rpc, void *c) {
 		if(rpc->scan(c, "*S", &bd)<1) {
 			bd.s = NULL;
 			bd.len = 0;
+		} else {
+			if(bd.len==1 && *bd.s=='.') {
+				bd.s = NULL;
+				bd.len = 0;
+			} else if(bd.len==1 && *bd.s=='_') {
+				bd.s = "";
+				bd.len = 0;
+			}
 		}
 	}
 
 	dlg_bridge(&from, &to, &op, &bd);
 }
 
+static const char *rpc_dlg_stats_active_doc[2] = {
+	"Get stats about active dialogs", 0
+};
+
+/*!
+ * \brief Print stats of active dialogs
+ */
+static void rpc_dlg_stats_active(rpc_t *rpc, void *c)
+{
+	dlg_cell_t *dlg;
+	unsigned int i;
+	int dlg_starting = 0;
+	int dlg_connecting = 0;
+	int dlg_answering = 0;
+	int dlg_ongoing = 0;
+	void *h;
+
+	for( i=0 ; i<d_table->size ; i++ ) {
+		dlg_lock( d_table, &(d_table->entries[i]) );
+
+		for( dlg=d_table->entries[i].first ; dlg ; dlg=dlg->next ) {
+			switch(dlg->state) {
+				case DLG_STATE_UNCONFIRMED:
+					dlg_starting++;
+				break;
+				case DLG_STATE_EARLY:
+					dlg_connecting++;
+				break;
+				case DLG_STATE_CONFIRMED_NA:
+					dlg_answering++;
+				break;
+				case DLG_STATE_CONFIRMED:
+					dlg_ongoing++;
+				break;
+				default:
+					LM_DBG("not active - state: %d\n", dlg->state);
+			}
+		}
+		dlg_unlock( d_table, &(d_table->entries[i]) );
+	}
+
+	if (rpc->add(c, "{", &h) < 0) {
+		rpc->fault(c, 500, "Server failure");
+		return;
+	}
+
+	rpc->struct_add(h, "ddddd",
+		"starting", dlg_starting,
+		"connecting", dlg_connecting,
+		"answering", dlg_answering,
+		"ongoing", dlg_ongoing,
+		"all", dlg_starting + dlg_connecting + dlg_answering + dlg_ongoing);
+}
+
+/*!
+ * \brief Helper function that outputs matching dialogs via the RPC interface
+ *
+ * \param rpc RPC node that should be filled
+ * \param c RPC void pointer
+ * \param with_context if 1 then the dialog context will be also printed
+ */
+static void rpc_dlg_list_match_ex(rpc_t *rpc, void *c, int with_context)
+{
+	dlg_cell_t *dlg = NULL;
+	int i = 0;
+	str mkey = {NULL, 0};
+	str mop = {NULL, 0};
+	str mval = {NULL, 0};
+	str sval = {NULL, 0};
+	int n = 0;
+	int m = 0;
+	int vkey = 0;
+	int vop = 0;
+	int matched = 0;
+	regex_t mre;
+	regmatch_t pmatch;
+
+	i = rpc->scan(c, "SSS", &mkey, &mop, &mval);
+	if (i < 3) {
+		LM_ERR("unable to read required parameters (%d)\n", i);
+		rpc->fault(c, 500, "Invalid parameters");
+		return;
+	}
+	if(mkey.s==NULL || mkey.len<=0 || mop.s==NULL || mop.len<=0
+			|| mval.s==NULL || mval.len<=0) {
+		LM_ERR("invalid parameters (%d)\n", i);
+		rpc->fault(c, 500, "Invalid parameters");
+		return;
+	}
+	if(mkey.len==4 && strncmp(mkey.s, "ruri", mkey.len)==0) {
+		vkey = 0;
+	} else if(mkey.len==4 && strncmp(mkey.s, "furi", mkey.len)==0) {
+		vkey = 1;
+	} else if(mkey.len==4 && strncmp(mkey.s, "turi", mkey.len)==0) {
+		vkey = 2;
+	} else if(mkey.len==5 && strncmp(mkey.s, "callid", mkey.len)==0) {
+		vkey = 3;
+	} else {
+		LM_ERR("invalid key %.*s\n", mkey.len, mkey.s);
+		rpc->fault(c, 500, "Invalid matching key parameter");
+		return;
+	}
+	if(mop.len!=2) {
+		LM_ERR("invalid matching operator %.*s\n", mop.len, mop.s);
+		rpc->fault(c, 500, "Invalid matching operator parameter");
+		return;
+
+	}
+	if(strncmp(mop.s, "eq", 2)==0) {
+		vop = 0;
+	} else if(strncmp(mop.s, "re", 2)==0) {
+		vop = 1;
+		memset(&mre, 0, sizeof(regex_t));
+		if (regcomp(&mre, mval.s, REG_EXTENDED|REG_ICASE|REG_NEWLINE)!=0) {
+			LM_ERR("failed to compile regex: %.*s\n", mval.len, mval.s);
+			rpc->fault(c, 500, "Invalid matching value parameter");
+			return;
+		}
+	} else if(strncmp(mop.s, "sw", 2)==0) {
+		vop = 2;
+	} else {
+		LM_ERR("invalid matching operator %.*s\n", mop.len, mop.s);
+		rpc->fault(c, 500, "Invalid matching operator parameter");
+		return;
+	}
+	if(rpc->scan(c, "*d", &n)<1) {
+		n = 0;
+	}
+
+	for(i=0; i<d_table->size; i++) {
+		dlg_lock(d_table, &(d_table->entries[i]));
+		for(dlg=d_table->entries[i].first; dlg!=NULL; dlg=dlg->next) {
+			matched = 0;
+			switch(vkey) {
+				case 0:
+					sval = dlg->req_uri;
+				break;
+				case 1:
+					sval = dlg->from_uri;
+				break;
+				case 2:
+					sval = dlg->to_uri;
+				break;
+				case 3:
+					sval = dlg->callid;
+				break;
+			}
+			switch(vop) {
+				case 0:
+					/* string comparison */
+					if(mval.len==sval.len
+							&& strncmp(mval.s, sval.s, mval.len)==0) {
+						matched = 1;
+					}
+				break;
+				case 1:
+					/* regexp matching */
+					if(regexec(&mre, sval.s, 1, &pmatch, 0)==0) {
+						matched = 1;
+					}
+				break;
+				case 2:
+					/* starts with */
+					if(mval.len<=sval.len
+							&& strncmp(mval.s, sval.s, mval.len)==0) {
+						matched = 1;
+					}
+				break;
+			}
+			if (matched==1) {
+				m++;
+				internal_rpc_print_dlg(rpc, c, dlg, with_context);
+				if(n>0 && m==n) {
+					break;
+				}
+			}
+		}
+		dlg_unlock(d_table, &(d_table->entries[i]));
+		if(n>0 && m==n) {
+			break;
+		}
+	}
+	if(vop == 1) {
+		regfree(&mre);
+	}
+
+	if(m==0) {
+		rpc->fault(c, 404, "Not found");
+		return;
+	}
+}
+
+/*!
+ * \brief Print matching dialogs
+ */
+static void rpc_dlg_list_match(rpc_t *rpc, void *c)
+{
+	rpc_dlg_list_match_ex(rpc, c, 0);
+}
+
+/*!
+ * \brief Print matching dialogs wih context
+ */
+static void rpc_dlg_list_match_ctx(rpc_t *rpc, void *c)
+{
+	rpc_dlg_list_match_ex(rpc, c, 1);
+}
+
 static rpc_export_t rpc_methods[] = {
 	{"dlg.list", rpc_print_dlgs, rpc_print_dlgs_doc, RET_ARRAY},
 	{"dlg.list_ctx", rpc_print_dlgs_ctx, rpc_print_dlgs_ctx_doc, RET_ARRAY},
+	{"dlg.list_match", rpc_dlg_list_match, rpc_dlg_list_match_doc, RET_ARRAY},
+	{"dlg.list_match_ctx", rpc_dlg_list_match_ctx, rpc_dlg_list_match_ctx_doc, RET_ARRAY},
 	{"dlg.dlg_list", rpc_print_dlg, rpc_print_dlg_doc, 0},
 	{"dlg.dlg_list_ctx", rpc_print_dlg_ctx, rpc_print_dlg_ctx_doc, 0},
 	{"dlg.end_dlg", rpc_end_dlg_entry_id, rpc_end_dlg_entry_id_doc, 0},
@@ -2371,5 +2626,7 @@ static rpc_export_t rpc_methods[] = {
 	{"dlg.profile_list", rpc_profile_print_dlgs, rpc_profile_print_dlgs_doc, RET_ARRAY},
 	{"dlg.bridge_dlg", rpc_dlg_bridge, rpc_dlg_bridge_doc, 0},
 	{"dlg.terminate_dlg", rpc_dlg_terminate_dlg, rpc_dlg_terminate_dlg_doc, 0},
+	{"dlg.stats_active", rpc_dlg_stats_active, rpc_dlg_stats_active_doc, 0},
+	{"dlg.is_alive",  rpc_dlg_is_alive, rpc_dlg_is_alive_doc, 0},
 	{0, 0, 0, 0}
 };

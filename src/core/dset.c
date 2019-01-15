@@ -82,7 +82,7 @@ int init_dst_set(void)
 	/* sr_dst_max_branches - 1 : because of the default branch for r-uri, #0 in tm */
 	branches = (branch_t*)pkg_malloc((sr_dst_max_branches-1)*sizeof(branch_t));
 	if(branches==NULL) {
-		LM_ERR("not enough memory to initialize destination branches\n");
+		PKG_MEM_ERROR;
 		return -1;
 	}
 	memset(branches, 0, (sr_dst_max_branches-1)*sizeof(branch_t));
@@ -602,7 +602,7 @@ int rewrite_uri(struct sip_msg* _m, str* _s)
 	if(_m->new_uri.s==NULL || _m->new_uri.len<_s->len) {
 		buf = (char*)pkg_malloc(_s->len + 1);
 		if (!buf) {
-			LM_ERR("No memory left to rewrite r-uri\n");
+			PKG_MEM_ERROR;
 			return -1;
 		}
 	}
@@ -763,7 +763,8 @@ int uri_add_rcv_alias(sip_msg_t *msg, str *uri, str *nuri)
 	/*uri;alias=[ip]~port~proto*/
 	len = uri->len+ip.len+port.len+12;
 	if(len>=nuri->len) {
-		LM_ERR("not enough space for new uri: %d\n", len);
+		LM_ERR("not enough space - new uri len: %d (buf size: %d)\n",
+				len, nuri->len);
 		return -1;
 	}
 	p = nuri->s;
@@ -876,18 +877,18 @@ int uri_restore_rcv_alias(str *uri, str *nuri, str *suri)
 	nuri->len = p - nuri->s;
 
 	p = suri->s;
-	strncpy(p, "sip:", 4);
+	memcpy(p, "sip:", 4);
 	p += 4;
-	strncpy(p, ip.s, ip.len);
+	memcpy(p, ip.s, ip.len);
 	p += ip.len;
 	*p++ = ':';
-	strncpy(p, port.s, port.len);
+	memcpy(p, port.s, port.len);
 	p += port.len;
 	proto_type_to_str((unsigned short)proto, &sproto);
 	if(sproto.len>0 && proto!=PROTO_UDP) {
-		strncpy(p, ";transport=", 11);
+		memcpy(p, ";transport=", 11);
 		p += 11;
-		strncpy(p, sproto.s, sproto.len);
+		memcpy(p, sproto.s, sproto.len);
 		p += sproto.len;
 	}
 	suri->len = p - suri->s;

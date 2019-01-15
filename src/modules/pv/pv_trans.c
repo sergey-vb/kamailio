@@ -59,7 +59,7 @@ static param_t* _tr_uri_params = NULL;
 
 /*! transformation buffer size */
 #define TR_BUFFER_SIZE 65536
-#define TR_BUFFER_SLOTS	4
+#define TR_BUFFER_SLOTS	8
 
 /*! transformation buffer */
 static char **_tr_buffer_list = NULL;
@@ -1156,6 +1156,56 @@ int tr_eval_string(struct sip_msg *msg, tr_param_t *tp, int subtype,
 			val->ri = 0;
 			break;
 
+		case TR_S_UNQUOTE:
+			if(!(val->flags&PV_VAL_STR)) {
+				val->rs.s = int2str(val->ri, &val->rs.len);
+				break;
+			}
+			if(val->rs.len<2) {
+				break;
+			}
+			if(val->rs.len>TR_BUFFER_SIZE-2) {
+				LM_ERR("value too large: %d\n", val->rs.len);
+				return -1;
+			}
+			if((val->rs.s[0] == val->rs.s[val->rs.len-1])
+					&& (val->rs.s[0] == '"' || val->rs.s[0] == '\'')) {
+				memcpy(_tr_buffer, val->rs.s+1, val->rs.len-2);
+				val->rs.len -= 2;
+			} else {
+				memcpy(_tr_buffer, val->rs.s, val->rs.len);
+			}
+			val->flags = PV_VAL_STR;
+			val->rs.s = _tr_buffer;
+			val->rs.s[val->rs.len] = '\0';
+			break;
+
+		case TR_S_UNBRACKET:
+			if(!(val->flags&PV_VAL_STR)) {
+				val->rs.s = int2str(val->ri, &val->rs.len);
+				break;
+			}
+			if(val->rs.len<2) {
+				break;
+			}
+			if(val->rs.len>TR_BUFFER_SIZE-2) {
+				LM_ERR("value too large: %d\n", val->rs.len);
+				return -1;
+			}
+			if((val->rs.s[0] == '(' && val->rs.s[val->rs.len-1] == ')')
+					|| (val->rs.s[0] == '[' && val->rs.s[val->rs.len-1] == ']')
+					|| (val->rs.s[0] == '{' && val->rs.s[val->rs.len-1] == '}')
+					|| (val->rs.s[0] == '<' && val->rs.s[val->rs.len-1] == '>')) {
+				memcpy(_tr_buffer, val->rs.s+1, val->rs.len-2);
+				val->rs.len -= 2;
+			} else {
+				memcpy(_tr_buffer, val->rs.s, val->rs.len);
+			}
+			val->flags = PV_VAL_STR;
+			val->rs.s = _tr_buffer;
+			val->rs.s[val->rs.len] = '\0';
+			break;
+
 		default:
 			LM_ERR("unknown subtype %d (cfg line: %d)\n",
 					subtype, get_cfg_crt_line());
@@ -2077,28 +2127,28 @@ done:
 		} \
 	}
 
-#define _tr_parse_sparam(_p, _p0, _tp, _spec, _ps, _in, _s) \
+/**
+ * _m: 1 - the parameter value can be the TR_PARAM_MARKER; 0 - not allowed
+ */
+#define _tr_parse_sparamx(_p, _p0, _tp, _spec, _ps, _in, _s, _m) \
 	while(is_in_str(_p, _in) && (*_p==' ' || *_p=='\t' || *_p=='\n')) _p++; \
 	if(*_p==PV_MARKER) \
 	{ /* pseudo-variable */ \
 		_spec = (pv_spec_t*)pkg_malloc(sizeof(pv_spec_t)); \
-		if(_spec==NULL) \
-		{ \
+		if(_spec==NULL) { \
 			LM_ERR("no more private memory!\n"); \
 			goto error; \
 		} \
 		_s.s = _p; _s.len = _in->s + _in->len - _p; \
 		_p0 = pv_parse_spec(&_s, _spec); \
-		if(_p0==NULL) \
-		{ \
+		if(_p0==NULL) { \
 			LM_ERR("invalid spec in substr transformation: %.*s!\n", \
 					_in->len, _in->s); \
 			goto error; \
 		} \
 		_p = _p0; \
 		_tp = (tr_param_t*)pkg_malloc(sizeof(tr_param_t)); \
-		if(_tp==NULL) \
-		{ \
+		if(_tp==NULL) { \
 			LM_ERR("no more private memory!\n"); \
 			goto error; \
 		} \
@@ -2109,17 +2159,23 @@ done:
 		_ps = _p; \
 		while(is_in_str(_p, _in) && *_p!='\t' && *_p!='\n' \
 				&& *_p!=TR_PARAM_MARKER && *_p!=TR_RBRACKET) \
-		_p++; \
-		if(*_p=='\0') \
-		{ \
+			_p++; \
+		if(*_p=='\0') { \
 			LM_ERR("invalid param in transformation: %.*s!!\n", \
 					_in->len, _in->s); \
 			goto error; \
 		} \
+		if(_m && *_p==TR_PARAM_MARKER) { \
+			_p++; \
+			if(*_p=='\0') { \
+				LM_ERR("invalid param in transformation: %.*s!!!\n", \
+					_in->len, _in->s); \
+				goto error; \
+			} \
+		} \
 		_tp = (tr_param_t*)pkg_malloc(sizeof(tr_param_t)); \
-		if(_tp==NULL) \
-		{ \
-			LM_ERR("no more private memory!\n"); \
+		if(_tp==NULL) { \
+			LM_ERR("no more private memory!!\n"); \
 			goto error; \
 		} \
 		memset(_tp, 0, sizeof(tr_param_t)); \
@@ -2128,6 +2184,8 @@ done:
 		_tp->v.s.len = _p - _ps; \
 	}
 
+#define _tr_parse_sparam(_p, _p0, _tp, _spec, _ps, _in, _s) \
+	_tr_parse_sparamx(_p, _p0, _tp, _spec, _ps, _in, _s, 0)
 
 /*!
  * \brief Helper fuction to parse a string transformation
@@ -2508,6 +2566,12 @@ char* tr_parse_string(str* in, trans_t *t)
 	} else if(name.len==15 && strncasecmp(name.s, "urldecode.param", 15)==0) {
 		t->subtype = TR_S_URLDECODEPARAM;
 		goto done;
+	} else if(name.len==7 && strncasecmp(name.s, "unquote", 7)==0) {
+		t->subtype = TR_S_UNQUOTE;
+		goto done;
+	} else if(name.len==9 && strncasecmp(name.s, "unbracket", 9)==0) {
+		t->subtype = TR_S_UNBRACKET;
+		goto done;
 	}
 
 	LM_ERR("unknown transformation: %.*s/%.*s/%d!\n", in->len, in->s,
@@ -2787,13 +2851,11 @@ char* tr_parse_paramlist(str* in, trans_t *t)
 		goto done;
 	} else if(name.len==5 && strncasecmp(name.s, "count", 5)==0) {
 		t->subtype = TR_PL_COUNT;
-		if(*p==TR_PARAM_MARKER)
-		{
+		if(*p==TR_PARAM_MARKER) {
 			start_pos = ++p;
-			_tr_parse_sparam(p, p0, tp, spec, ps, in, s);
+			_tr_parse_sparamx(p, p0, tp, spec, ps, in, s, 1);
 			t->params = tp;
-			if (tp->type != TR_PARAM_SPEC && p - start_pos != 1)
-			{
+			if (tp->type != TR_PARAM_SPEC && p - start_pos != 1) {
 				LM_ERR("invalid separator in transformation: "
 						"%.*s\n", in->len, in->s);
 				goto error;
@@ -2801,8 +2863,7 @@ char* tr_parse_paramlist(str* in, trans_t *t)
 			tp = 0;
 
 			while(*p && (*p==' ' || *p=='\t' || *p=='\n')) p++;
-			if(*p!=TR_RBRACKET)
-			{
+			if(*p!=TR_RBRACKET) {
 				LM_ERR("invalid name transformation: %.*s!\n",
 						in->len, in->s);
 				goto error;

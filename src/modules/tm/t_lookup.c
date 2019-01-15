@@ -47,6 +47,7 @@
 #include "../../core/parser/parser_f.h"
 #include "../../core/parser/parse_from.h"
 #include "../../core/ut.h"
+#include "../../core/fmsg.h"
 #include "../../core/timer.h"
 #include "../../core/timer_ticks.h"
 #include "../../core/hash_func.h"
@@ -882,13 +883,13 @@ int t_reply_matching( struct sip_msg *p_msg , int *p_branch )
 
 	/* sanity check */
 	if (unlikely(reverse_hex2int(hashi, hashl, &hash_index)<0
-				||hash_index>=TABLE_ENTRIES
+				|| hash_index>=TABLE_ENTRIES
 				|| reverse_hex2int(branchi, branchl, &branch_id)<0
 				|| branch_id>=sr_dst_max_branches
 				|| loopl!=MD5_LEN)
 			) {
-		LM_DBG("poor reply labels %d label %d branch %d\n",
-				hash_index, entry_label, branch_id );
+		LM_DBG("poor reply ids - index %d label %d branch %d loopl %d/%d\n",
+				hash_index, entry_label, branch_id, loopl, MD5_LEN);
 		goto nomatch2;
 	}
 
@@ -1319,6 +1320,10 @@ int t_newtran( struct sip_msg* p_msg )
 	LM_DBG("msg id=%d , global msg id=%d ,"
 			" T on entrance=%p\n",p_msg->id,global_msg_id,T);
 
+	if(faked_msg_match(p_msg)) {
+		LM_INFO("attempt to create transaction for a faked request"
+				" - try to avoid it\n");
+	}
 	if ( T && T!=T_UNDEFINED  ) {
 		/* ERROR message moved to w_t_newtran */
 		LM_DBG("transaction already in process %p\n", T );
